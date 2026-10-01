@@ -28,7 +28,7 @@ Fully offline: no accounts, no servers — everything runs on your machine.
 | 2. ELM327 session + serial transport | done |
 | 3. Decoders (PIDs, DTC, freeze, readiness, VIN, Mode 06) | done |
 | 4. Worker thread + polling scheduler | done |
-| 5. UI core (dashboard, gauges, live graph) | pending |
+| 5. UI core (dashboard, gauges, live graph) | done |
 | 6. Diagnostic panels + settings + export | pending |
 | 7. Packaging (PyInstaller) + docs | pending |
 

@@ -13,11 +13,20 @@ def test_version_is_semver():
     assert re.fullmatch(r"\d+\.\d+\.\d+", autodiag.__version__)
 
 
-def test_entry_point_prints_version(capsys):
-    main_mod.main()
-    out = capsys.readouterr().out
-    assert "AutoDiag Pro" in out
-    assert autodiag.__version__ in out
+def test_entry_point_launches_gui(monkeypatch):
+    import autodiag.ui.app as ui_app
+
+    called: list[bool] = []
+
+    def fake_run(argv=None):  # noqa: ARG001
+        called.append(True)
+        return 0
+
+    monkeypatch.setattr(ui_app, "main", fake_run)
+    with pytest.raises(SystemExit) as excinfo:
+        main_mod.main()
+    assert excinfo.value.code == 0
+    assert called == [True]
 
 
 def test_subpackages_importable():
