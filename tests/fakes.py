@@ -8,8 +8,12 @@ and no echo.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
+from typing import Any
 
+from autodiag.obd.elm327 import Elm327Session
 from autodiag.transports.base import Transport, TransportError
+from autodiag.transports.serial_transport import Connection
 
 UNKNOWN = b"?\r\r>"
 
@@ -152,3 +156,26 @@ class RecordingFactory:
         self.attempts.append((device, baud))
         ser = self.per_baud.get(baud)
         return ser if ser is not None else FakeSerial(silent=True)
+
+
+def scripted_connector(
+    responses: dict[str, bytes] | None = None,
+) -> tuple[Callable[[str], Any], dict[str, Any]]:
+    """Engine-level connector double: returns ``(connector, holder)``.
+
+    ``holder["transport"]`` / ``holder["session"]`` are populated on each
+    successful connect so tests can reach in (e.g. to close the transport).
+    """
+    script = elm_script(**(responses or {}))
+    holder: dict[str, Any] = {}
+
+    def connector(device: str) -> Any:
+        transport = FakeTransport(script)
+        session = Elm327Session(transport)
+        info = session.initialize()
+        holder["transport"] = transport
+        holder["session"] = session
+        holder["device"] = device
+        return Connection(session=session, info=info, baudrate=38400)
+
+    return connector, holder

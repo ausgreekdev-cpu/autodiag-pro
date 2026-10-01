@@ -1,0 +1,300 @@
+"""ObdEngine tests: jobs, discovery, polling, error paths (no Qt, no threads)."""
+
+from __future__ import annotations
+
+import pytest
+
+from autodiag.services.engine import ObdEngine
+from autodiag.transports.base import TransportError
+from tests.fakes import scripted_connector
+
+
+def _pump(engine: ObdEngine, pred, *, limit: int = 2000) -> bool:
+    for _ in range(limit):
+        if pred():
+            return True
+        engine.step(0.0)
+    return pred()
+
+
+class Recorder:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, tuple]] = []
+
+    def __call__(self, kind: str, args: tuple) -> None:
+        self.events.append((kind, args))
+
+    def of(self, kind: str) -> list[tuple]:
+        return [args for k, args in self.events if k == kind]
+
+    def last(self, kind: str) -> tuple:
+        matches = self.of(kind)
+        assert matches, f"no {kind!r} event in {self.events}"
+        return matches[-1]
+
+
+def test_connect_discover_and_emit_info():
+    connector, holder = scripted_connector()
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+
+    engine.submit("connect", "/dev/OBD")
+    assert engine.step(0.0)
+
+    assert sink.of("connected"), "connect must emit connected"
+    info = sink.last("connected")[0]
+    assert info.adapter == "ELM327 v1.5"
+    assert info.voltage == pytest.approx(12.6)
+    assert holder["device"] == "/dev/OBD"
+    assert engine.connected
+
+    # voltage emitted from the ATZ/ATRV banner
+    assert sink.of("voltage") == [(12.6,)]
+
+    # supported PIDs discovered from the 0100 bitmap (registry only)
+    supported = sink.last("pids_supported")[0]
+    assert {0x04, 0x05, 0x0C, 0x0D, 0x11} <= supported
+    assert 0x02 not in supported  # bit clear in spec fixture BE3EA813
+    assert 0x20 not in supported  # bitmap pseudo-PID filtered out
+    assert engine.supported_pids == supported
+
+
+def test_connect_failure_emits_error_and_disconnected():
+    def broken(device: str):
+        raise TransportError("port vanished")
+
+    sink = Recorder()
+    engine = ObdEngine(connector=broken, on_event=sink)
+
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    assert sink.of("error")
+    assert sink.of("disconnected")
+    assert not engine.connected
+
+
+def test_poll_emits_pid_values():
+    connector, _holder = scripted_connector()
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("set_poll", ({0x0C, 0x0D}, 0.0))
+    engine.step(0.0)
+    _pump(engine, lambda: len(sink.of("pid_value")) >= 2)
+
+    values = dict((pid, value) for pid, value, _t in sink.of("pid_value"))
+    assert values[0x0C] == pytest.approx(1726.0)
+    assert values[0x0D] == 60.0
+
+
+def test_poll_drops_pid_after_repeated_failures():
+    connector, _holder = scripted_connector()
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    # PID 0x04 has no scripted response ("?") → three strikes then dropped
+    engine.submit("set_poll", ({0x04, 0x0C}, 0.0))
+    assert _pump(engine, lambda: any("Dropping PID 04" in m for m, in sink.of("status")))
+
+    sink.events.clear()
+    _pump(engine, lambda: len(sink.of("pid_value")) >= 2)
+    polled = {pid for pid, _v, _t in sink.of("pid_value")}
+    assert polled == {0x0C}
+
+
+def test_read_dtcs_uses_protocol_for_can_heuristic():
+    # ATDPN "A6" → CAN; even-length padded payload still count-prefixed
+    connector, _holder = scripted_connector(
+        {"ATDPN": b"A6\r\r>", "03": b"43 02 01 33 02 45 00\r\r>"}
+    )
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("read_dtcs", "stored")
+    engine.step(0.0)
+
+    source, codes = sink.last("dtcs")
+    assert source == "stored"
+    assert codes == ["P0133", "P0245"]
+
+
+def test_read_dtcs_odd_length_auto_can():
+    connector, _holder = scripted_connector({"07": b"43 03 01 33 02 45 03 67\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("read_dtcs", "pending")
+    engine.step(0.0)
+
+    source, codes = sink.last("dtcs")
+    assert source == "pending"
+    assert codes == ["P0133", "P0245", "P0367"]
+
+
+def test_clear_codes():
+    connector, _holder = scripted_connector({"04": b"44\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("clear_dtcs")
+    engine.step(0.0)
+
+    assert sink.last("cleared") == (True,)
+
+
+def test_read_monitors():
+    connector, _holder = scripted_connector({"0101": b"41 01 86 07 E5 87\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("read_monitors")
+    engine.step(0.0)
+
+    status = sink.last("monitors")[0]
+    assert status.mil_on and status.dtc_count == 6
+    assert not status.ready
+
+
+def test_read_vehicle_info():
+    connector, _holder = scripted_connector(
+        {
+            "0902": b"49 02 01 31 44 34 47 50 30 30 52 35 36 42 31 32 33 34 35 37\r\r>",
+            "0904": b"49 04 01 45 43 4D 31 41 32 2E 33 34 00\r\r>",
+            "0906": b"49 06 01 1B 2C 3D 4E\r\r>",
+        }
+    )
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("read_vehicle")
+    engine.step(0.0)
+
+    info = sink.last("vehicle")[0]
+    assert info["vin"] == "1D4GP00R56B123457"
+    assert info["cal_ids"] == ["ECM1A2.34"]
+    assert info["cvns"] == ["1B2C3D4E"]
+
+
+def test_read_vehicle_tolerates_missing_optional_types():
+    # No 0904/0906 in the script → "?" errors; VIN still returned
+    connector, _holder = scripted_connector(
+        {"0902": b"49 02 01 31 44 34 47 50 30 30 52 35 36 42 31 32 33 34 35 37\r\r>"}
+    )
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("read_vehicle")
+    engine.step(0.0)
+
+    info = sink.last("vehicle")[0]
+    assert info["vin"] == "1D4GP00R56B123457"
+    assert info["cal_ids"] == []
+
+
+def test_read_mode06():
+    connector, _holder = scripted_connector(
+        {
+            "0600": b"460080000000\r\r>",
+            "0601": b"46 01 01 0A 06 60 06 60 06 60\r\r>",
+        }
+    )
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("read_mode06")
+    engine.step(0.0)
+    engine.step(0.0)
+
+    assert sink.last("mids_supported")[0] == {0x01}
+    results = sink.last("mode06")[0]
+    assert len(results) == 1
+    assert results[0].mid == 0x01
+    assert results[0].passed is True
+
+
+def test_transport_failure_drops_connection():
+    connector, holder = scripted_connector()
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    assert engine.connected
+
+    holder["transport"].close()  # cable yanked mid-session
+    engine.submit("read_dtcs", "stored")
+    engine.step(0.0)
+
+    assert not engine.connected
+    assert sink.of("error")
+    assert sink.of("disconnected")
+
+
+def test_disconnect_and_stop():
+    connector, _holder = scripted_connector()
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("disconnect")
+    engine.step(0.0)
+    assert not engine.connected
+    assert sink.last("disconnected") == ("Disconnected",)
+
+    engine.stop()
+    assert engine.step(0.0) is False
+    assert engine.run_forever() is None  # returns immediately after stop
+
+
+def test_unknown_job_kind_is_ignored():
+    sink = Recorder()
+    engine = ObdEngine(on_event=sink)
+    engine.submit("no_such_job")
+    assert engine.step(0.0) is True
+    assert sink.events == []
+
+
+def test_read_voltage_job():
+    connector, _holder = scripted_connector()
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("read_voltage")
+    engine.step(0.0)
+    assert sink.of("voltage")[-1] == (12.6,)
+
+
+def test_elm_error_from_job_does_not_disconnect():
+    # "?" response for 0101 → ElmError surfaces as error, link stays up
+    connector, _holder = scripted_connector({"0101": b"?\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("read_monitors")
+    engine.step(0.0)
+
+    assert sink.of("error")
+    assert engine.connected
