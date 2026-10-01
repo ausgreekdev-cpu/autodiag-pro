@@ -27,6 +27,7 @@ class ObdWorker(QThread):
     monitors = Signal(object)  # MonitorStatus
     freeze_supported = Signal(object)  # set[int]
     freeze = Signal(object)  # FreezeFrame
+    freeze_all = Signal(object)  # dict[pid → value]
     vehicle = Signal(object)  # {"vin", "cal_ids", "cvns"}
     mids_supported = Signal(object)  # set[int]
     mode06 = Signal(object)  # list[TestResult]
@@ -44,6 +45,7 @@ class ObdWorker(QThread):
         "monitors",
         "freeze_supported",
         "freeze",
+        "freeze_all",
         "vehicle",
         "mids_supported",
         "mode06",
@@ -79,6 +81,9 @@ class ObdWorker(QThread):
 
     def read_freeze_support(self) -> None:
         self._engine.submit("read_freeze_support")
+
+    def read_freeze_all(self) -> None:
+        self._engine.submit("read_freeze_all")
 
     def read_vehicle(self) -> None:
         self._engine.submit("read_vehicle")

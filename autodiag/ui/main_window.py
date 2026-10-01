@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
@@ -19,21 +18,16 @@ from PySide6.QtWidgets import (
 )
 
 from autodiag.obd.elm327 import SessionInfo
+from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
 from autodiag.transports.serial_transport import SerialPortInfo, list_serial_ports
 from autodiag.ui.panels.dashboard import DashboardPanel
-
-
-class _PlaceholderPanel(QWidget):
-    """Nav stub for a panel that lands in the next milestone."""
-
-    def __init__(self, title: str, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        label = QLabel(f"{title}\n\nAvailable in the next milestone.")
-        label.setObjectName("subtle")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(label)
+from autodiag.ui.panels.freeze import FreezeFramePanel
+from autodiag.ui.panels.mode06 import Mode06Panel
+from autodiag.ui.panels.readiness import ReadinessPanel
+from autodiag.ui.panels.settings import SettingsPanel
+from autodiag.ui.panels.trouble_codes import TroubleCodesPanel
+from autodiag.ui.panels.vehicle import VehicleInfoPanel
 
 
 class MainWindow(QMainWindow):
@@ -42,6 +36,7 @@ class MainWindow(QMainWindow):
     def __init__(self, worker: ObdWorker | None = None) -> None:
         super().__init__()
         self.worker = worker or ObdWorker()
+        self.record = ScanRecord()
         self._connected = False
 
         self.setWindowTitle("AutoDiag Pro")
@@ -98,11 +93,14 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._dashboard = DashboardPanel(self.worker)
         self._stack.addWidget(self._dashboard)
-        self._stack.addWidget(_PlaceholderPanel("Trouble codes"))
-        self._stack.addWidget(_PlaceholderPanel("Readiness monitors"))
-        self._stack.addWidget(_PlaceholderPanel("Freeze frame"))
-        self._stack.addWidget(_PlaceholderPanel("Vehicle info"))
-        self._stack.addWidget(_PlaceholderPanel("Mode $06"))
+        self._stack.addWidget(TroubleCodesPanel(self.worker))
+        self._stack.addWidget(ReadinessPanel(self.worker))
+        self._stack.addWidget(FreezeFramePanel(self.worker))
+        self._stack.addWidget(VehicleInfoPanel(self.worker))
+        self._stack.addWidget(Mode06Panel(self.worker))
+        self._stack.addWidget(
+            SettingsPanel(self.record, lambda msg: self.statusBar().showMessage(msg, 8000))
+        )
 
         nav_items = (
             "Dashboard",
@@ -111,6 +109,7 @@ class MainWindow(QMainWindow):
             "Freeze frame",
             "Vehicle info",
             "Mode $06",
+            "Settings",
         )
         nav = QWidget()
         nav.setFixedWidth(184)
@@ -139,11 +138,23 @@ class MainWindow(QMainWindow):
         status.showMessage("Ready — select a port and connect.", 0)
 
     def _wire_worker(self) -> None:
-        self.worker.status.connect(lambda msg: self.statusBar().showMessage(msg, 5000))
-        self.worker.error.connect(lambda msg: self.statusBar().showMessage(f"Error: {msg}", 8000))
-        self.worker.connected.connect(self._on_connected)
-        self.worker.disconnected.connect(self._on_disconnected)
-        self.worker.voltage.connect(self._on_voltage)
+        worker = self.worker
+        worker.status.connect(lambda msg: self.statusBar().showMessage(msg, 5000))
+        worker.error.connect(lambda msg: self.statusBar().showMessage(f"Error: {msg}", 8000))
+        worker.connected.connect(self._on_connected)
+        worker.disconnected.connect(self._on_disconnected)
+        worker.voltage.connect(self._on_voltage)
+
+        # feed the exportable scan record (same events the panels consume)
+        record = self.record.record_event
+        worker.connected.connect(lambda info: record("connected", (info,)))
+        worker.disconnected.connect(lambda reason: record("disconnected", (reason,)))
+        worker.pid_value.connect(lambda pid, value, ts: record("pid_value", (pid, value, ts)))
+        worker.dtcs.connect(lambda source, codes: record("dtcs", (source, codes)))
+        worker.monitors.connect(lambda status: record("monitors", (status,)))
+        worker.vehicle.connect(lambda info: record("vehicle", (info,)))
+        worker.freeze_all.connect(lambda values: record("freeze_all", (values,)))
+        worker.mode06.connect(lambda results: record("mode06", (results,)))
 
     # -- public API --------------------------------------------------------------
 

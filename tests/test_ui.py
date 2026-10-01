@@ -88,12 +88,16 @@ def test_dashboard_graph_selection_follows_checkbox(qapp):
 def test_main_window_navigation(qapp):
     window = MainWindow()
     stack = window.findChildren(QStackedWidget)[0]
-    assert stack.count() == 6
+    assert stack.count() == 7
 
     window.show_panel(2)
     assert stack.currentIndex() == 2
     assert _button(window, "Readiness").isChecked()
     assert not _button(window, "Dashboard").isChecked()
+
+    window.show_panel(6)
+    assert stack.currentIndex() == 6
+    assert _button(window, "Settings").isChecked()
 
     window.show_panel(0)
     assert stack.currentIndex() == 0

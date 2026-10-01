@@ -29,7 +29,7 @@ Fully offline: no accounts, no servers — everything runs on your machine.
 | 3. Decoders (PIDs, DTC, freeze, readiness, VIN, Mode 06) | done |
 | 4. Worker thread + polling scheduler | done |
 | 5. UI core (dashboard, gauges, live graph) | done |
-| 6. Diagnostic panels + settings + export | pending |
+| 6. Diagnostic panels + settings + export | done |
 | 7. Packaging (PyInstaller) + docs | pending |
 
 ## Install & run
