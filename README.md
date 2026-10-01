@@ -25,8 +25,8 @@ Fully offline: no accounts, no servers — everything runs on your machine.
 | Milestone | Status |
 |---|---|
 | 1. Project bootstrap (tooling, CI) | done |
-| 2. ELM327 session + serial transport | pending |
-| 3. Decoders (PIDs, DTC, freeze, readiness, VIN, Mode 06) | pending |
+| 2. ELM327 session + serial transport | done |
+| 3. Decoders (PIDs, DTC, freeze, readiness, VIN, Mode 06) | done |
 | 4. Worker thread + polling scheduler | pending |
 | 5. UI core (dashboard, gauges, live graph) | pending |
 | 6. Diagnostic panels + settings + export | pending |

@@ -9,6 +9,9 @@ import re
 
 PROMPT = ">"
 
+# Multi-line responses are numbered per ISO-TP: "0: ...", "1: ..." ... "F: ...".
+_LINE_MARKER = re.compile(r"(?m)^\s*[0-9A-F]{1,2}:")
+
 # Ordered longest/most-specific first. Every marker contains at least one
 # non-hex character, so they can never collide with a hex payload.
 ERROR_MARKERS: tuple[tuple[str, str], ...] = (
@@ -68,16 +71,50 @@ def classify(raw: str, cmd: str = "") -> tuple[str | None, str]:
     return None, text
 
 
+def flatten_response(text: str) -> str:
+    """Collapse a response to one uppercase hex string.
+
+    Removes line breaks and ISO-TP line markers (``0:``, ``1:``, ...) so
+    multi-frame payloads (VIN, long DTC lists, Mode $06 dumps) become a
+    single continuous hex string.
+    """
+    return re.sub(r"\s+", "", _LINE_MARKER.sub("", text)).upper()
+
+
 def extract_payload(text: str, prefix: str) -> str | None:
     """Hex bytes following a response prefix (e.g. ``"410C"``), no whitespace.
 
     Returns ``None`` when the prefix is absent (wrong PID / no data).
     """
-    flat = re.sub(r"\s+", "", text).upper()
+    flat = flatten_response(text)
     idx = flat.find(prefix.upper())
     if idx < 0:
         return None
     return flat[idx + len(prefix):]
+
+
+def parse_supported_mask(
+    text: str,
+    prefix: str,
+    base: int,
+) -> tuple[set[int], bool]:
+    """Decode a 32-ID support bitmap (PIDs ``0100``/``0120``..., OBDMIDs...).
+
+    Returns ``(ids supported in this block, next block bit set)`` — query the
+    next block when the second element is ``True``.
+    """
+    payload = extract_payload(text, prefix)
+    if payload is None:
+        return set(), False
+    try:
+        data = hex_to_bytes(payload)
+    except ValueError:
+        return set(), False
+    if len(data) < 4:
+        return set(), False
+    bits = int.from_bytes(data[:4], "big")
+    supported = {base + i + 1 for i in range(32) if bits & (1 << (31 - i))}
+    return supported, (base + 0x20) in supported
 
 
 def hex_to_bytes(hex_text: str) -> bytes:
