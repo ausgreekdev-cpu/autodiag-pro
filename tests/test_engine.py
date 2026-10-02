@@ -107,6 +107,53 @@ def test_poll_drops_pid_after_repeated_failures():
     assert polled == {0x0C}
 
 
+def test_supported_pids_include_stft_companions():
+    connector, _holder = scripted_connector()
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    supported = sink.last("pids_supported")[0]
+    assert 0x15 in supported  # fixture bitmap BE3EA813 supports it
+    assert 0x115 in supported  # …and therefore its STFT companion
+    assert 0x14 not in supported
+    assert 0x114 not in supported  # companion tracks its base PID
+
+
+def test_poll_emits_o2_stft_companion():
+    connector, _holder = scripted_connector({"0115": b"41 15 7A 90\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("set_poll", ({0x15}, 0.0))
+    engine.step(0.0)
+    assert _pump(engine, lambda: any(pid == 0x115 for pid, *_ in sink.of("pid_value")))
+
+    values = dict((pid, value) for pid, value, _t in sink.of("pid_value"))
+    assert values[0x15] == pytest.approx(0.61)  # 0x7A / 200
+    assert values[0x115] == pytest.approx(12.5)  # (0x90 - 128) * 100/128
+
+
+def test_set_poll_normalizes_companions_to_base_requests():
+    connector, holder = scripted_connector({"0115": b"41 15 7A 90\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("set_poll", ({0x15, 0x115, 0x0C}, 0.0))
+    engine.step(0.0)
+    assert engine._poll_pids == [0x0C, 0x15]
+
+    _pump(engine, lambda: len(sink.of("pid_value")) >= 4, limit=50)
+    writes = holder["transport"].writes
+    assert "0115" in writes
+    assert not any(cmd.startswith("01115") for cmd in writes)  # synthetic id
+
+
 def test_read_dtcs_uses_protocol_for_can_heuristic():
     # ATDPN "A6" → CAN; even-length padded payload still count-prefixed
     connector, _holder = scripted_connector(

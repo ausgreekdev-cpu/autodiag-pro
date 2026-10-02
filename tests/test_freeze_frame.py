@@ -1,5 +1,7 @@
 """Freeze frame (mode $02) decode tests."""
 
+import pytest
+
 from autodiag.obd import freeze_frame
 
 
@@ -40,3 +42,17 @@ def test_named_frame_number():
     assert frame is not None
     assert frame.frame == 2
     assert frame.value == 83
+
+
+def test_o2_freeze_frame_strips_frame_byte():
+    # 42 14 [frame 00] 9C 80 → 0.78 V. Regression: O2 PIDs used to declare
+    # 4 data bytes, so the frame byte was decoded as the voltage (0.0 V).
+    frame = freeze_frame.parse_freeze_frame("42 14 00 9C 80", 0x14)
+    assert frame is not None
+    assert frame.value == pytest.approx(0.78)
+
+
+def test_o2_freeze_frame_without_frame_byte():
+    frame = freeze_frame.parse_freeze_frame("42149C80", 0x14)
+    assert frame is not None
+    assert frame.value == pytest.approx(0.78)

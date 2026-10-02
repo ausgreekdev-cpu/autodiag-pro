@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from autodiag.obd.pids import PID_REGISTRY
+from autodiag.obd.pids import PID_REGISTRY, request_pid
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.widgets.gauge import Gauge
 from autodiag.ui.widgets.graph import LiveGraph
@@ -172,7 +172,7 @@ class DashboardPanel(QWidget):
             check.setCheckState(Qt.CheckState.Unchecked)
             self._table.setItem(row, _COL_GRAPH, check)
 
-            self._table.setItem(row, _COL_PID, QTableWidgetItem(f"{pid:02X}"))
+            self._table.setItem(row, _COL_PID, QTableWidgetItem(f"{request_pid(pid):02X}"))
             self._table.setItem(row, _COL_NAME, QTableWidgetItem(definition.name))
             value_item = QTableWidgetItem("--")
             value_item.setTextAlignment(

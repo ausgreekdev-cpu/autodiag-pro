@@ -26,7 +26,7 @@ def test_decode_maf_throttle_voltage_o2():
     assert pids.decode_pid(0x10, bytes.fromhex("01F4")) == pytest.approx(5.0)
     assert pids.decode_pid(0x11, bytes.fromhex("FF")) == pytest.approx(100.0)
     assert pids.decode_pid(0x42, bytes.fromhex("3039")) == pytest.approx(12.345)
-    assert pids.decode_pid(0x14, bytes.fromhex("9C800000")) == pytest.approx(0.78)
+    assert pids.decode_pid(0x14, bytes.fromhex("9C80")) == pytest.approx(0.78)
 
 
 def test_decode_unknown_and_truncated():
@@ -65,3 +65,44 @@ def test_supported_mask_helper_direct():
     supported, nxt = framing.parse_supported_mask("4600BE3EA813", "4600", 0x00)
     assert 0x01 in supported
     assert nxt is True
+
+
+def test_o2_pids_are_two_data_bytes():
+    for pid in range(0x14, 0x1C):
+        assert pids.PID_REGISTRY[pid].data_bytes == 2
+
+
+def test_stft_companion_definitions():
+    definition = pids.PID_REGISTRY[0x114]
+    assert definition.name == "O2 sensor B1S1 STFT"
+    assert definition.unit == "%"
+    assert definition.decimals == 1
+    assert pids.request_pid(0x114) == 0x14
+    assert pids.request_pid(0x1B) == 0x1B
+    assert pids.request_pid(0x14) == 0x14
+    assert pids.request_pid(0x0C) == 0x0C
+    assert {0x114 + i for i in range(8)} <= pids.PID_REGISTRY.keys()
+
+
+def test_parse_pid_values_emits_base_and_stft():
+    values = pids.parse_pid_values("41 14 9C 80", 0x14)
+    assert values[0x14] == pytest.approx(0.78)
+    assert values[0x114] == pytest.approx(0.0, abs=0.01)  # 0x80 → centered trim
+
+    values = pids.parse_pid_values("41 15 7A 90", 0x15)
+    assert values[0x15] == pytest.approx(0.61)
+    assert values[0x115] == pytest.approx(12.5)
+
+
+def test_parse_pid_values_stft_sentinel_omits_channel():
+    # B == 0xFF: sensor not used in trim calculation (J1979)
+    values = pids.parse_pid_values("41 14 9C FF", 0x14)
+    assert 0x114 not in values
+    assert values[0x14] == pytest.approx(0.78)
+
+
+def test_parse_pid_values_plain_pid_has_no_companions():
+    values = pids.parse_pid_values("41 0C 1A F8", 0x0C)
+    assert set(values) == {0x0C}
+    assert values[0x0C] == pytest.approx(1726)
+    assert pids.parse_pid_values("", 0x14) == {}

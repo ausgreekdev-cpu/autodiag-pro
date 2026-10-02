@@ -144,7 +144,9 @@ class ObdEngine:
             self._emit("voltage", float(conn.info.voltage))
         self._discover_supported()
         if not self._poll_pids:
-            self._poll_pids = sorted(self._supported)
+            self._poll_pids = sorted(
+                {pid_dec.request_pid(p) for p in self._supported}
+            )
             self._polling = bool(self._poll_pids)
             if self._polling:
                 self._emit(
@@ -161,11 +163,19 @@ class ObdEngine:
         if interval is not None:
             self._poll_interval = max(float(interval), 0.0)
         if pids is not None:
-            self._poll_pids = sorted(p for p in pids if p in pid_dec.PID_REGISTRY)
+            self._poll_pids = sorted(
+                {
+                    pid_dec.request_pid(p)
+                    for p in pids
+                    if p in pid_dec.PID_REGISTRY
+                }
+            )
             self._failures.clear()
             self._cursor = 0
         elif not self._poll_pids:
-            self._poll_pids = sorted(self._supported)
+            self._poll_pids = sorted(
+                {pid_dec.request_pid(p) for p in self._supported}
+            )
         self._polling = bool(self._poll_pids) and self._session is not None
         if self._polling:
             self._emit(
@@ -284,9 +294,8 @@ class ObdEngine:
                 self._emit("error", str(exc))
             return
         self._failures[pid] = 0
-        value = pid_dec.parse_pid_value(text, pid)
-        if value is not None:
-            self._emit("pid_value", pid, value, self._clock())
+        for channel, value in pid_dec.parse_pid_values(text, pid).items():
+            self._emit("pid_value", channel, value, self._clock())
         self._ticks += 1
         if self._ticks % _VOLTAGE_EVERY == 0:
             try:
@@ -310,6 +319,11 @@ class ObdEngine:
                 break
             base += 0x20
         self._supported = {p for p in supported if p in pid_dec.PID_REGISTRY}
+        self._supported |= {
+            companion
+            for companion in pid_dec.COMPANION_PIDS
+            if pid_dec.request_pid(companion) in self._supported
+        }
         self._emit("pids_supported", set(self._supported))
 
     def _read_voltage(self) -> float:

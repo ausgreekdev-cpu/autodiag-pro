@@ -52,6 +52,10 @@ def _o2_volts(d: bytes) -> float:
     return d[0] / 200.0
 
 
+def _o2_stft(d: bytes) -> float:
+    return (d[1] - 128) * 100.0 / 128
+
+
 def _load(d: bytes) -> float:
     return _u16(d) * 100.0 / 255
 
@@ -114,14 +118,14 @@ _DEFS: tuple[PidDef, ...] = (
     _p(0x0F, "Intake air temperature", "°C", "temps", 1, _temp, 0),
     _p(0x10, "Mass air flow", "g/s", "air", 2, _maf, 2),
     _p(0x11, "Throttle position", "%", "engine", 1, _pct255),
-    _p(0x14, "O2 sensor B1S1", "V", "o2", 4, _o2_volts, 3),
-    _p(0x15, "O2 sensor B1S2", "V", "o2", 4, _o2_volts, 3),
-    _p(0x16, "O2 sensor B2S1", "V", "o2", 4, _o2_volts, 3),
-    _p(0x17, "O2 sensor B2S2", "V", "o2", 4, _o2_volts, 3),
-    _p(0x18, "O2 sensor B3S1", "V", "o2", 4, _o2_volts, 3),
-    _p(0x19, "O2 sensor B3S2", "V", "o2", 4, _o2_volts, 3),
-    _p(0x1A, "O2 sensor B4S1", "V", "o2", 4, _o2_volts, 3),
-    _p(0x1B, "O2 sensor B4S2", "V", "o2", 4, _o2_volts, 3),
+    _p(0x14, "O2 sensor B1S1", "V", "o2", 2, _o2_volts, 3),
+    _p(0x15, "O2 sensor B1S2", "V", "o2", 2, _o2_volts, 3),
+    _p(0x16, "O2 sensor B2S1", "V", "o2", 2, _o2_volts, 3),
+    _p(0x17, "O2 sensor B2S2", "V", "o2", 2, _o2_volts, 3),
+    _p(0x18, "O2 sensor B3S1", "V", "o2", 2, _o2_volts, 3),
+    _p(0x19, "O2 sensor B3S2", "V", "o2", 2, _o2_volts, 3),
+    _p(0x1A, "O2 sensor B4S1", "V", "o2", 2, _o2_volts, 3),
+    _p(0x1B, "O2 sensor B4S2", "V", "o2", 2, _o2_volts, 3),
     _p(0x1F, "Engine run time", "s", "engine", 2, _u16, 0),
     _p(0x21, "Distance with MIL on", "km", "emissions", 2, _u16, 0),
     _p(0x2F, "Fuel level", "%", "fuel", 1, _pct255),
@@ -140,7 +144,26 @@ _DEFS: tuple[PidDef, ...] = (
     _p(0x62, "Actual engine torque", "%", "engine", 1, _torque, 0),
 )
 
-PID_REGISTRY: dict[int, PidDef] = {d.pid: d for d in _DEFS}
+_BASE_REGISTRY: dict[int, PidDef] = {d.pid: d for d in _DEFS}
+
+# Companion channels: O2 PIDs $14-$1B carry short-term fuel trim in byte B
+# (SAE J1979 — the trim is "not used" when B == $FF). Synthetic ids $114-$11B
+# ride along with their base PID's single wire request; see request_pid().
+COMPANION_PIDS: dict[int, PidDef] = {
+    base + 0x100: PidDef(
+        pid=base + 0x100,
+        name=f"{definition.name} STFT",
+        unit="%",
+        category="o2",
+        data_bytes=2,
+        scale=_o2_stft,
+        decimals=1,
+    )
+    for base, definition in _BASE_REGISTRY.items()
+    if 0x14 <= base <= 0x1B
+}
+
+PID_REGISTRY: dict[int, PidDef] = {**_BASE_REGISTRY, **COMPANION_PIDS}
 
 # Block-bitmap pseudo-PIDs a vehicle can report as supported.
 SUPPORTED_PIDS: tuple[int, ...] = (0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0)
@@ -148,6 +171,11 @@ SUPPORTED_PIDS: tuple[int, ...] = (0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0)
 
 def pid_def(pid: int) -> PidDef | None:
     return PID_REGISTRY.get(pid)
+
+
+def request_pid(pid: int) -> int:
+    """The PID to put on the wire (companions share their base request)."""
+    return pid - 0x100 if pid in COMPANION_PIDS else pid
 
 
 def decode_pid(pid: int, data: bytes) -> float | None:
@@ -171,6 +199,36 @@ def parse_pid_value(text: str, pid: int) -> float | None:
     except ValueError:
         return None
     return decode_pid(pid, data)
+
+
+def parse_pid_values(text: str, pid: int) -> dict[int, float]:
+    """Decode every channel carried by a ``01 <pid>`` response.
+
+    Returns the base PID plus any companion channels (``pid`` must be the
+    on-the-wire PID, i.e. :func:`request_pid` output). Companions whose
+    sentinel byte marks them unused (O2 STFT == ``$FF``) are omitted.
+    """
+    payload = framing.extract_payload(text, f"41{pid:02X}")
+    if payload is None:
+        return {}
+    try:
+        data = framing.hex_to_bytes(payload)
+    except ValueError:
+        return {}
+    values: dict[int, float] = {}
+    value = decode_pid(pid, data)
+    if value is not None:
+        values[pid] = value
+    for companion, definition in COMPANION_PIDS.items():
+        if request_pid(companion) != pid:
+            continue
+        try:
+            if data[1] == 0xFF:  # J1979: sensor not used in trim calculation
+                continue
+            values[companion] = definition.scale(data)
+        except (IndexError, ValueError):
+            continue
+    return values
 
 
 def parse_supported_pids(text: str, base: int = 0x00) -> tuple[set[int], bool]:
