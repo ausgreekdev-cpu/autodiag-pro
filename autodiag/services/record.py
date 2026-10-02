@@ -19,7 +19,7 @@ class ScanRecord:
     cvns: list[str] = field(default_factory=list)
     monitors: MonitorStatus | None = None
     dtcs: dict[str, list[str]] = field(default_factory=dict)  # source → codes
-    freeze: dict[int, float] = field(default_factory=dict)  # pid → value
+    freeze: dict[int, dict[int, float]] = field(default_factory=dict)  # frame → pid → value
     mode06: list[object] = field(default_factory=list)  # mode06.TestResult
     pids: dict[int, tuple[float, float]] = field(default_factory=dict)  # pid → (v, t)
     updated_at: datetime | None = None
@@ -45,7 +45,7 @@ class ScanRecord:
             self.cal_ids = list(info.get("cal_ids") or [])
             self.cvns = list(info.get("cvns") or [])
         elif kind == "freeze_all":
-            self.freeze = dict(args[0])
+            self.freeze[int(args[0])] = dict(args[1])
         elif kind == "mode06":
             self.mode06 = list(args[0])
         else:

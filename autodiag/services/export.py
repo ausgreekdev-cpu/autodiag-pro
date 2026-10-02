@@ -45,16 +45,18 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
     }
 
     freeze = []
-    for pid, value in sorted(record.freeze.items()):
-        definition = PID_REGISTRY.get(pid)
-        freeze.append(
-            {
-                "pid": f"{pid:02X}",
-                "name": definition.name if definition else f"PID {pid:02X}",
-                "unit": definition.unit if definition else "",
-                "value": value,
-            }
-        )
+    for frame, values in sorted(record.freeze.items()):
+        for pid, value in sorted(values.items()):
+            definition = PID_REGISTRY.get(pid)
+            freeze.append(
+                {
+                    "frame": frame,
+                    "pid": f"{pid:02X}",
+                    "name": definition.name if definition else f"PID {pid:02X}",
+                    "unit": definition.unit if definition else "",
+                    "value": value,
+                }
+            )
 
     mode06 = []
     for result in record.mode06:
@@ -146,7 +148,12 @@ def report_to_csv(report: dict[str, Any]) -> str:
             add(f"dtc.{source}", entry["code"], "", entry["description"] or "")
 
     for item in report["freeze_frame"]:
-        add("freeze_frame", item["pid"], item["name"], f"{item['value']} {item['unit']}")
+        add(
+            "freeze_frame",
+            f"F{item['frame']}:{item['pid']}",
+            item["name"],
+            f"{item['value']} {item['unit']}",
+        )
 
     for item in report["mode06"]:
         detail = (

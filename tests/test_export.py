@@ -34,7 +34,8 @@ def make_record() -> ScanRecord:
         "vehicle",
         ({"vin": "1D4GP00R56B123457", "cal_ids": ["ECM1A2.34"], "cvns": ["1B2C3D4E"]},),
     )
-    record.record_event("freeze_all", ({0x0C: 1726.0},))
+    record.record_event("freeze_all", (0, {0x0C: 1726.0}))
+    record.record_event("freeze_all", (1, {0x05: 83.0}))  # per-frame merge
     record.record_event("mode06", (parse_test_results("46 01 01 0A 06 60 06 60 06 60"),))
     return record
 
@@ -57,6 +58,8 @@ def test_build_report_content():
     assert stored[0]["description"] == "Cylinder 1 Misfire Detected"
 
     assert report["freeze_frame"][0]["name"] == "Engine RPM"
+    assert report["freeze_frame"][0]["frame"] == 0
+    assert {item["frame"] for item in report["freeze_frame"]} == {0, 1}
     assert report["mode06"][0]["result"] == "PASS"
     assert (
         report["mode06"][0]["test"]
@@ -84,6 +87,8 @@ def test_report_csv_sections():
     assert any(
         "Rich-to-lean sensor threshold voltage" in line for line in lines
     )
+    assert any(line.startswith("freeze_frame,F0:0C") for line in lines)
+    assert any(line.startswith("freeze_frame,F1:05") for line in lines)
 
 
 def test_write_report_selects_format_by_suffix(tmp_path):

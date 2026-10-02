@@ -153,7 +153,9 @@ class MainWindow(QMainWindow):
         worker.dtcs.connect(lambda source, codes: record("dtcs", (source, codes)))
         worker.monitors.connect(lambda status: record("monitors", (status,)))
         worker.vehicle.connect(lambda info: record("vehicle", (info,)))
-        worker.freeze_all.connect(lambda values: record("freeze_all", (values,)))
+        worker.freeze_all.connect(
+            lambda frame, values: record("freeze_all", (frame, values))
+        )
         worker.mode06.connect(lambda results: record("mode06", (results,)))
 
     # -- public API --------------------------------------------------------------

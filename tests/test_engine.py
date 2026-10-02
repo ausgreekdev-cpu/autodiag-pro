@@ -498,7 +498,30 @@ def test_read_freeze_all():
     engine.step(0.0)
 
     assert sink.last("freeze_supported")[0] == {0x0C}
-    assert sink.last("freeze_all")[0] == {0x0C: 1726.0}
+    assert sink.last("freeze_all") == (0, {0x0C: 1726.0})
+
+
+def test_read_freeze_all_frame_picker():
+    connector, _holder = scripted_connector(
+        {
+            "0200": b"420000100000\r\r>",  # bitmap → PID 0x0C supported
+            "020C00": b"42 0C 00 1A F8\r\r>",
+            "020C01": b"42 0C 01 1B 00\r\r>",
+            "020C02": b"NO DATA\r\r>",
+        }
+    )
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("read_freeze_all", 1)
+    engine.step(0.0)
+    assert sink.last("freeze_all") == (1, {0x0C: 1728.0})  # 0x1B00 / 4
+
+    engine.submit("read_freeze_all", 2)  # frame with no stored data
+    engine.step(0.0)
+    assert sink.last("freeze_all") == (2, {})
 
 
 def test_elm_error_from_job_does_not_disconnect():

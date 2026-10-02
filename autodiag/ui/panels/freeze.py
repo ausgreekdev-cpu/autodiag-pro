@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -23,6 +24,7 @@ class FreezeFramePanel(QWidget):
     def __init__(self, worker: ObdWorker, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._worker = worker
+        self._frames: dict[int, dict[int, float]] = {}
 
         self._build_ui()
         worker.connected.connect(lambda _info: self._read_btn.setEnabled(True))
@@ -39,9 +41,16 @@ class FreezeFramePanel(QWidget):
         layout.addWidget(heading)
 
         actions = QHBoxLayout()
+        actions.addWidget(QLabel("Frame"))
+        self._frame_combo = QComboBox()
+        self._frame_combo.addItems(["0", "1", "2"])
+        self._frame_combo.currentIndexChanged.connect(lambda _index: self._show_frame())
+        actions.addWidget(self._frame_combo)
         self._read_btn = QPushButton("Read freeze frame")
         self._read_btn.setEnabled(False)
-        self._read_btn.clicked.connect(lambda: self._worker.read_freeze_all())
+        self._read_btn.clicked.connect(
+            lambda: self._worker.read_freeze_all(self._frame_combo.currentIndex())
+        )
         actions.addWidget(self._read_btn)
         actions.addStretch(1)
         layout.addLayout(actions)
@@ -70,7 +79,14 @@ class FreezeFramePanel(QWidget):
 
     # -- worker handlers ------------------------------------------------------------
 
-    def on_freeze_all(self, values: dict[int, float]) -> None:
+    def on_freeze_all(self, frame: int, values: dict[int, float]) -> None:
+        self._frames[frame] = values
+        self._frame_combo.setCurrentIndex(frame)
+        self._show_frame()
+
+    def _show_frame(self) -> None:
+        frame = self._frame_combo.currentIndex()
+        values = self._frames.get(frame, {})
         self._table.setRowCount(0)
         for pid in sorted(values):
             definition = PID_REGISTRY.get(pid)
@@ -87,11 +103,19 @@ class FreezeFramePanel(QWidget):
             self._table.setItem(row, 2, value_item)
             self._table.setItem(row, 3, QTableWidgetItem(definition.unit))
         if values:
-            self._hint.setText(f"Snapshot with {len(values)} parameter(s).")
-        else:
+            self._hint.setText(
+                f"Frame {frame} — snapshot with {len(values)} parameter(s)."
+            )
+        elif frame in self._frames:
             self._hint.setText("No freeze frame is stored (or the vehicle reported none).")
+        else:
+            self._hint.setText(
+                f"Frame {frame} has not been read yet — press Read freeze frame."
+            )
 
     def _reset(self) -> None:
+        self._frames.clear()
+        self._frame_combo.setCurrentIndex(0)
         self._table.setRowCount(0)
         self._read_btn.setEnabled(False)
         self._hint.setText(

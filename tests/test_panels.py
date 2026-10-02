@@ -65,7 +65,7 @@ def test_freeze_panel_fills_table(qapp):
     worker = ObdWorker()
     panel = FreezeFramePanel(worker)
 
-    worker.freeze_all.emit({0x0C: 1726.0, 0x0D: 60.0})
+    worker.freeze_all.emit(0, {0x0C: 1726.0, 0x0D: 60.0})
 
     table = panel.findChildren(QTableWidget)[0]
     assert table.rowCount() == 2
@@ -73,6 +73,33 @@ def test_freeze_panel_fills_table(qapp):
     assert table.item(0, 2).text() == "1726"
     assert table.item(1, 1).text() == "Vehicle speed"
     assert table.item(1, 2).text() == "60"
+    assert "Frame 0" in panel._hint.text()
+
+
+def test_freeze_panel_frame_picker_switches_cache(qapp):
+    worker = ObdWorker()
+    panel = FreezeFramePanel(worker)
+    table = panel.findChildren(QTableWidget)[0]
+    combo = panel._frame_combo
+
+    assert combo.count() == 3
+    worker.freeze_all.emit(0, {0x0C: 1726.0})
+    worker.freeze_all.emit(1, {0x0C: 999.0})
+
+    # reading frame 1 switches the combo to it
+    assert combo.currentIndex() == 1
+    assert table.item(0, 2).text() == "999"
+    assert "Frame 1" in panel._hint.text()
+
+    # switching back shows the cached frame 0 without another request
+    combo.setCurrentIndex(0)
+    assert table.item(0, 2).text() == "1726"
+    assert "Frame 0" in panel._hint.text()
+
+    # frame 2 was never read
+    combo.setCurrentIndex(2)
+    assert table.rowCount() == 0
+    assert "not been read" in panel._hint.text()
 
 
 def test_vehicle_panel_fills_fields(qapp):

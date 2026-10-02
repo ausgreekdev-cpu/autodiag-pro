@@ -233,22 +233,26 @@ class ObdEngine:
         supported, _nxt = framing.parse_supported_mask(text, "4200", 0x00)
         self._emit("freeze_supported", supported)
 
-    def _job_read_freeze_all(self, _payload: Any) -> None:
+    def _job_read_freeze_all(self, payload: Any) -> None:
+        frame = int(payload) if payload is not None else 0
         text = self._req("0200")
         supported, _nxt = framing.parse_supported_mask(text, "4200", 0x00)
         pids = sorted(p for p in supported if p in pid_dec.PID_REGISTRY)
         self._emit("freeze_supported", set(pids))
         values: dict[int, float] = {}
         for index, pid in enumerate(pids, start=1):
-            self._emit("status", f"Freeze frame {index}/{len(pids)} — PID {pid:02X}")
+            self._emit(
+                "status",
+                f"Freeze frame {frame}: {index}/{len(pids)} — PID {pid:02X}",
+            )
             try:
-                frame_text = self._req(f"02{pid:02X}00")
+                frame_text = self._req(f"02{pid:02X}{frame:02X}")
             except ElmError:
                 continue
-            frame = freeze_frame.parse_freeze_frame(frame_text, pid, 0)
-            if frame is not None:
-                values[pid] = frame.value
-        self._emit("freeze_all", values)
+            parsed = freeze_frame.parse_freeze_frame(frame_text, pid, frame)
+            if parsed is not None:
+                values[pid] = parsed.value
+        self._emit("freeze_all", frame, values)
 
     def _job_read_vehicle(self, _payload: Any) -> None:
         out: dict[str, Any] = {"vin": None, "cal_ids": [], "cvns": []}

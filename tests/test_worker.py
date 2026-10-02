@@ -59,3 +59,19 @@ def test_worker_shutdown_without_connect(app):
     worker.start()
     worker.shutdown()
     assert not worker.isRunning()
+
+
+def test_worker_freeze_all_signal_carries_frame(app):
+    worker = ObdWorker()
+    seen: list = []
+    worker.freeze_all.connect(lambda frame, values: seen.append((frame, values)))
+    worker.freeze_all.emit(1, {0x0C: 1726.0})
+    assert seen == [(1, {0x0C: 1726.0})]
+
+
+def test_worker_read_freeze_all_submits_frame(app):
+    worker = ObdWorker()
+    worker.read_freeze_all(2)
+    assert worker.engine._jobs.get_nowait() == ("read_freeze_all", 2)
+    worker.read_freeze_all()
+    assert worker.engine._jobs.get_nowait() == ("read_freeze_all", 0)
