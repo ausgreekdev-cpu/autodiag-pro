@@ -14,17 +14,22 @@ port (USB cable or paired Bluetooth SPP dongle).
 
 ## Features
 
-- **Live data** — engine RPM, speed, coolant, load, fuel trims, O2 sensors... ~40 SAE
-  J1979 PIDs discovered from the vehicle (`0100` supported-PID bitmaps), four headline
-  gauges + a scrolling graph of any ticked parameters
+- **Live data** — engine RPM, speed, coolant, load, fuel trims, O2 sensors (voltage
+  **and** short-term fuel trim per sensor)... ~40 SAE J1979 PIDs discovered from the
+  vehicle (`0100` supported-PID bitmaps), four headline gauges + a scrolling graph of
+  any ticked parameters
 - **Trouble codes** — read stored (`03`), pending (`07`) and permanent (`0A`) DTCs
   with plain-English descriptions (5,112-code bundled dictionary); clear codes (`04`,
   MIL off) with confirmation
 - **Readiness monitors** — I/M status: check emissions readiness before a smog test
-- **Freeze frame** — sensor snapshot captured when a fault was set (`02`)
+- **Freeze frame** — sensor snapshot captured when a fault was set (`02`), with a
+  frame 0/1/2 picker
 - **Vehicle info** — VIN, calibration IDs, CVN (`09`)
-- **Mode $06** — onboard test results (MID/TID value vs. min/max, PASS/FAIL)
+- **Mode $06** — onboard test results (monitor + standardized test name vs. the
+  min/max limits the ECU used, PASS/FAIL)
 - **Reports** — export everything collected to JSON or CSV
+- **Resilient link** — if the adapter drops mid-session the app reconnects by itself
+  (1–15 s backoff, up to 5 attempts)
 
 Fully offline: no accounts, no servers — everything runs on your machine.
 
@@ -71,11 +76,13 @@ autodiag            # or: python -m autodiag
    discovers which PIDs the vehicle supports.
 3. **Dashboard** — gauges and the value table update live; the poll interval (default
    250 ms) controls request spacing. Tick rows to graph those parameters. Failed PIDs
-   are dropped automatically after 3 timeouts.
+   are dropped automatically after 3 timeouts, and a lost adapter connection is
+   retried by itself (1 s → 15 s backoff, 5 attempts).
 4. **Trouble codes** — press *Read codes*; switch tabs for pending/permanent.
    *Clear codes* asks for confirmation first.
 5. **Readiness / Freeze frame / Vehicle info / Mode $06** — each panel has its own
-   read button; results stay available for the report.
+   read button; results stay available for the report. The freeze-frame panel can
+   read any of frames 0–2 and keeps each frame cached for comparison.
 6. **Settings** — export the whole session (VIN, codes, monitors, Mode $06, latest
    readings) as JSON or CSV.
 
@@ -127,6 +134,7 @@ auto-detected.
 | Port missing from the list | Linux: add yourself to the `dialout` group, re-plug; Bluetooth: pair the SPP device first |
 | Values stuck at `--` | Vehicle may not support those PIDs — the table only shows supported ones |
 | CAN errors while polling | Slow the poll interval down (e.g. 500 ms) |
+| Connection lost mid-scan | The app reconnects by itself (5 attempts over ~30 s); if it gives up, press *Connect* again |
 
 ## Project layout
 
@@ -142,7 +150,8 @@ autodiag.spec   PyInstaller build recipe
 ```
 
 Architecture in one paragraph: `ObdEngine` (pure Python) owns the ELM327 session —
-it executes queued jobs (connect, read codes, ...) and round-robin-polls live PIDs.
+it executes queued jobs (connect, read codes, ...) and round-robin-polls live PIDs,
+dropping the link and auto-reconnecting with backoff when the transport fails.
 `ObdWorker` runs it on a `QThread` and re-emits results as Qt signals. Panels
 subscribe to those signals; `ScanRecord` accumulates everything for reports.
 Everything speaks SAE J1979 (modes $01–$0A) — no cloud services anywhere.
