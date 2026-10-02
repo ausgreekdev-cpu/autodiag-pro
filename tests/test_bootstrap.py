@@ -13,6 +13,15 @@ def test_version_is_semver():
     assert re.fullmatch(r"\d+\.\d+\.\d+", autodiag.__version__)
 
 
+def test_version_matches_pyproject():
+    import tomllib
+    from pathlib import Path
+
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    assert data["project"]["version"] == autodiag.__version__
+
+
 def test_entry_point_launches_gui(monkeypatch):
     import autodiag.ui.app as ui_app
 

@@ -1,5 +1,12 @@
 # AutoDiag Pro
 
+![CI](https://github.com/ausgreekdev-cpu/autodiag-pro/actions/workflows/ci.yml/badge.svg)
+[![latest release](https://img.shields.io/github/v/release/ausgreekdev-cpu/autodiag-pro)](https://github.com/ausgreekdev-cpu/autodiag-pro/releases/latest)
+
+<p align="center">
+  <img src="assets/icon-256.png" width="96" alt="AutoDiag Pro icon">
+</p>
+
 **OBD-II scan tool** — desktop diagnostics app for ELM327 adapters (USB / Bluetooth SPP).
 
 Dark-themed PySide6 dashboard that talks to your car's ELM327 adapter over a serial
@@ -20,6 +27,18 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **Reports** — export everything collected to JSON or CSV
 
 Fully offline: no accounts, no servers — everything runs on your machine.
+
+## Download
+
+Prebuilt binaries for every release are on the
+[Releases page](https://github.com/ausgreekdev-cpu/autodiag-pro/releases):
+
+- **Linux (x86_64)** — `autodiag-linux-x86_64`: `chmod +x autodiag-linux-x86_64 && ./autodiag-linux-x86_64`
+- **Windows (x86_64)** — `autodiag-windows-x86_64.exe`: double-click (SmartScreen may
+  ask "More info → Run anyway" for unsigned builds)
+
+Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
+*Packaging a standalone executable* below to build from source instead.
 
 ## Status
 

@@ -41,4 +41,5 @@ exe = EXE(
     runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
+    icon="packaging/autodiag.ico",
 )
