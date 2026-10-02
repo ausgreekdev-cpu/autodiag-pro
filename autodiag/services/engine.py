@@ -27,6 +27,7 @@ Connector = Callable[[str], Connection]
 DEFAULT_POLL_INTERVAL = 0.25  # seconds between PID requests (~4 req/s)
 _VOLTAGE_EVERY = 40  # poll ticks between ATRV battery-voltage refreshes
 _MAX_PID_FAILURES = 3  # consecutive ElmErrors before a PID is dropped
+_RECONNECT_BACKOFF = (1.0, 2.0, 4.0, 8.0, 15.0)  # seconds before each retry
 
 _CAN_PROTOCOLS = {"6", "7", "8", "9"}  # ATDPN digits for ISO 15765-4
 
@@ -50,6 +51,10 @@ class ObdEngine:
         self._session = None
         self._info: SessionInfo | None = None
         self._can: bool | None = None
+        self._device: str | None = None
+        self._reconnect_device: str | None = None
+        self._reconnect_attempts = 0
+        self._reconnect_at = 0.0
         self._supported: set[int] = set()
         self._poll_pids: list[int] = []
         self._poll_interval = DEFAULT_POLL_INTERVAL
@@ -102,11 +107,19 @@ class ObdEngine:
         if job is not None:
             kind, payload = job
             if kind == "stop":
+                self._cancel_reconnect()
                 self._drop_connection("Stopped")
                 return False
             self._execute(kind, payload)
             return True
-        self._maybe_poll()
+        try:
+            self._maybe_reconnect()
+            self._maybe_poll()
+        except TransportError as exc:
+            # a vanished link must never escape the loop (it would kill the
+            # worker thread): drop once, then schedule auto-reconnect
+            self._drop_connection(str(exc), error=True)
+            self._schedule_reconnect()
         return True
 
     # -- job execution -------------------------------------------------------
@@ -119,19 +132,25 @@ class ObdEngine:
             handler(payload)
         except TransportError as exc:
             self._drop_connection(str(exc), error=True)
+            self._schedule_reconnect()
         except ElmError as exc:
             self._emit("error", str(exc))
 
     def _job_connect(self, device: str) -> None:
+        self._cancel_reconnect()
         if self._session is not None:
             self._drop_connection("Reconnecting")
-        connector = self._connector or self._default_connector
         try:
-            conn = connector(device)
+            self._establish(device)
         except (TransportError, ElmError) as exc:
             self._emit("error", str(exc))
             self._emit("disconnected", str(exc))
-            return
+
+    def _establish(self, device: str) -> None:
+        """Open the adapter session for ``device`` (raises on failure)."""
+        connector = self._connector or self._default_connector
+        conn = connector(device)
+        self._device = device
         self._session = conn.session
         self._info = conn.info
         pn = (conn.info.protocol_number or "").upper().lstrip("A")
@@ -147,15 +166,16 @@ class ObdEngine:
             self._poll_pids = sorted(
                 {pid_dec.request_pid(p) for p in self._supported}
             )
-            self._polling = bool(self._poll_pids)
-            if self._polling:
-                self._emit(
-                    "status",
-                    f"Polling {len(self._poll_pids)} PIDs every "
-                    f"{self._poll_interval:g}s",
-                )
+        self._polling = bool(self._poll_pids)
+        if self._polling:
+            self._emit(
+                "status",
+                f"Polling {len(self._poll_pids)} PIDs every "
+                f"{self._poll_interval:g}s",
+            )
 
     def _job_disconnect(self, _payload: Any) -> None:
+        self._cancel_reconnect()
         self._drop_connection("Disconnected")
 
     def _job_set_poll(self, payload: Any) -> None:
@@ -302,6 +322,57 @@ class ObdEngine:
                 self._emit("voltage", self._read_voltage())
             except ElmError:
                 pass
+
+    # -- reconnect -----------------------------------------------------------
+
+    def _schedule_reconnect(self) -> None:
+        if self._reconnect_device is not None or self._device is None:
+            return  # already pending, or never connected (manual retry only)
+        self._reconnect_device = self._device
+        self._reconnect_attempts = 0
+        delay = _RECONNECT_BACKOFF[0]
+        self._reconnect_at = self._clock() + delay
+        self._emit("status", f"Connection lost — reconnecting in {delay:g}s")
+
+    def _cancel_reconnect(self) -> None:
+        self._reconnect_device = None
+        self._reconnect_attempts = 0
+        self._reconnect_at = 0.0
+
+    @property
+    def reconnect_pending(self) -> bool:
+        return self._reconnect_device is not None
+
+    def _maybe_reconnect(self) -> None:
+        if self._reconnect_device is None or self._session is not None:
+            return
+        if self._clock() < self._reconnect_at:
+            return
+        device = self._reconnect_device
+        attempt = self._reconnect_attempts
+        try:
+            self._establish(device)
+        except (TransportError, ElmError) as exc:
+            if self._session is not None:  # opened, then died during discovery
+                self._drop_connection(str(exc), error=True)
+            self._reconnect_attempts = attempt + 1
+            if self._reconnect_attempts >= len(_RECONNECT_BACKOFF):
+                self._emit("error", f"Reconnect failed: {exc} — giving up")
+                self._cancel_reconnect()
+                return
+            delay = _RECONNECT_BACKOFF[self._reconnect_attempts]
+            self._reconnect_at = self._clock() + delay
+            self._emit(
+                "status",
+                f"Reconnect failed ({self._reconnect_attempts}/"
+                f"{len(_RECONNECT_BACKOFF)}) — retrying in {delay:g}s",
+            )
+            return
+        self._emit(
+            "status",
+            "Reconnected" if attempt == 0 else f"Reconnected (attempt {attempt + 1})",
+        )
+        self._cancel_reconnect()
 
     # -- helpers -------------------------------------------------------------
 

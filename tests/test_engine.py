@@ -154,6 +154,156 @@ def test_set_poll_normalizes_companions_to_base_requests():
     assert not any(cmd.startswith("01115") for cmd in writes)  # synthetic id
 
 
+def test_transport_error_during_poll_schedules_reconnect():
+    connector, holder = scripted_connector()
+    clock = {"t": 0.0}
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink, clock=lambda: clock["t"])
+    engine.submit("connect", "/dev/OBD")
+    engine.step(0.0)
+    engine.submit("set_poll", ({0x0C}, 0.0))
+    engine.step(0.0)
+    assert _pump(engine, lambda: sink.of("pid_value"))
+
+    holder["transport"].close()  # cable yanked mid-session
+    clock["t"] = 1.0
+    assert engine.step(0.0) is not False  # must never kill the loop
+    assert sink.of("disconnected")
+    assert sink.of("error")
+    assert engine.reconnect_pending
+    assert not engine.connected
+    assert any("reconnecting in 1s" in m for m, in sink.of("status"))
+
+    clock["t"] = 2.0  # first backoff elapsed
+    assert engine.step(0.0)
+    assert engine.connected
+    assert not engine.reconnect_pending
+    assert "Reconnected" in sink.of("status")[-1][0]
+
+    sink.events.clear()
+    assert _pump(engine, lambda: sink.of("pid_value"))
+
+
+def test_reconnect_backoff_gives_up_after_five_attempts():
+    good, holder = scripted_connector()
+    clock = {"t": 0.0}
+    attempts: list[float] = []
+
+    def flaky(device: str):
+        attempts.append(clock["t"])
+        if len(attempts) == 1:
+            return good(device)
+        raise TransportError("port busy")
+
+    sink = Recorder()
+    engine = ObdEngine(connector=flaky, on_event=sink, clock=lambda: clock["t"])
+    engine.submit("connect", "/dev/OBD")
+    engine.step(0.0)
+    engine.submit("set_poll", ({0x0C}, 0.0))
+    engine.step(0.0)
+    _pump(engine, lambda: sink.of("pid_value"))
+
+    holder["transport"].close()
+    clock["t"] = 1.0
+    engine.step(0.0)  # drop → schedule at t=2
+    assert engine.reconnect_pending
+
+    for t in (2.0, 4.0, 8.0, 16.0):
+        clock["t"] = t
+        engine.step(0.0)
+        assert engine.reconnect_pending, f"still pending after attempt at {t}"
+
+    clock["t"] = 31.0
+    engine.step(0.0)
+    assert not engine.reconnect_pending  # fifth failure gives up
+    assert not engine.connected
+
+    clock["t"] = 100.0
+    engine.step(0.0)
+    assert not engine.reconnect_pending
+    assert not engine.connected
+
+    assert attempts[1:] == [2.0, 4.0, 8.0, 16.0, 31.0]
+    assert any("giving up" in m for m, in sink.of("error"))
+    assert any("(1/5)" in m and "2s" in m for m, in sink.of("status"))
+    assert any("(4/5)" in m and "15s" in m for m, in sink.of("status"))
+
+
+def test_manual_disconnect_cancels_reconnect():
+    good, holder = scripted_connector()
+    clock = {"t": 0.0}
+    state = {"fail": False}
+    calls = {"n": 0}
+
+    def connector(device: str):
+        calls["n"] += 1
+        if state["fail"]:
+            raise TransportError("port busy")
+        return good(device)
+
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink, clock=lambda: clock["t"])
+    engine.submit("connect", "/dev/OBD")
+    engine.step(0.0)
+    engine.submit("set_poll", ({0x0C}, 0.0))
+    engine.step(0.0)
+    _pump(engine, lambda: sink.of("pid_value"))
+
+    holder["transport"].close()
+    state["fail"] = True
+    clock["t"] = 1.0
+    engine.step(0.0)
+    assert engine.reconnect_pending
+
+    engine.submit("disconnect", None)
+    engine.step(0.0)
+    assert not engine.reconnect_pending
+
+    state["fail"] = False
+    calls_before = calls["n"]
+    clock["t"] = 100.0
+    engine.step(0.0)
+    assert calls["n"] == calls_before  # no zombie auto-attempt
+
+
+def test_manual_connect_cancels_reconnect():
+    good, holder = scripted_connector()
+    clock = {"t": 0.0}
+    state = {"fail": False}
+    calls = {"n": 0}
+
+    def connector(device: str):
+        calls["n"] += 1
+        if state["fail"]:
+            raise TransportError("port busy")
+        return good(device)
+
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink, clock=lambda: clock["t"])
+    engine.submit("connect", "/dev/OBD")
+    engine.step(0.0)
+    engine.submit("set_poll", ({0x0C}, 0.0))
+    engine.step(0.0)
+    _pump(engine, lambda: sink.of("pid_value"))
+
+    holder["transport"].close()
+    state["fail"] = True
+    clock["t"] = 1.0
+    engine.step(0.0)
+    assert engine.reconnect_pending
+
+    engine.submit("connect", "/dev/OBD2")  # user retries by hand → wins the race
+    engine.step(0.0)
+    assert not engine.reconnect_pending
+    assert sink.of("disconnected")  # manual attempt reported its failure
+
+    state["fail"] = False
+    calls_before = calls["n"]
+    clock["t"] = 100.0
+    engine.step(0.0)
+    assert calls["n"] == calls_before
+
+
 def test_read_dtcs_uses_protocol_for_can_heuristic():
     # ATDPN "A6" → CAN; even-length padded payload still count-prefixed
     connector, _holder = scripted_connector(
