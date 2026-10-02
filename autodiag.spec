@@ -8,7 +8,12 @@ Output: dist/autodiag  (.exe on Windows)
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 datas = collect_data_files("autodiag")
-hiddenimports = collect_submodules("pyqtgraph")
+# examples/test subpackages are not shipped: pyqtgraph.examples constructs a
+# QApplication at import time, which aborts headless build hosts.
+hiddenimports = collect_submodules(
+    "pyqtgraph",
+    filter=lambda name: not name.startswith(("pyqtgraph.examples", "pyqtgraph.test")),
+)
 
 a = Analysis(
     ["autodiag/__main__.py"],

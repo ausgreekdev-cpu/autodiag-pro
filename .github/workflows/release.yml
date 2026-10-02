@@ -37,6 +37,8 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Build
         shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: pyinstaller --noconfirm autodiag.spec
       - name: Smoke test (Linux)
         if: runner.os == 'Linux'
