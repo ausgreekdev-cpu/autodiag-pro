@@ -20,7 +20,7 @@ from autodiag.obd.mode06 import TestResult
 from autodiag.services.worker import ObdWorker
 from autodiag.ui import theme
 
-_COLUMNS = ("Monitor", "TID", "Value", "Min", "Max", "Unit", "Result")
+_COLUMNS = ("Monitor", "Test", "Value", "Min", "Max", "Unit", "Result")
 
 
 class Mode06Panel(QWidget):
@@ -67,7 +67,9 @@ class Mode06Panel(QWidget):
         self._table.verticalHeader().setDefaultSectionSize(28)
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for column in (1, 2, 3, 4, 5, 6):
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        self._table.setColumnWidth(1, 260)
+        for column in (2, 3, 4, 5, 6):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
         layout.addWidget(self._table, 1)
 
@@ -81,7 +83,7 @@ class Mode06Panel(QWidget):
             self._table.insertRow(row)
             values = (
                 result.monitor_name,
-                f"{result.tid:02X}",
+                result.test_name,
                 f"{result.value:g}",
                 f"{result.min_value:g}",
                 f"{result.max_value:g}",

@@ -21,6 +21,29 @@ def test_single_record_spec_example():
     assert r.passed is True
 
 
+def test_tid_names_table():
+    assert mode06.tid_name(0x01) == "Rich-to-lean sensor threshold voltage (constant)"
+    assert mode06.tid_name(0x05) == "Rich-to-lean sensor switch time (calculated)"
+    assert mode06.tid_name(0x0B) == (
+        "EWMA misfire counts for last 10 driving cycles (calculated)"
+    )
+    assert mode06.tid_name(0x0C) == (
+        "Misfire counts for last/current driving cycles (calculated)"
+    )
+    # range defaults (Table 157)
+    assert mode06.tid_name(0x00) == "Reserved by document"
+    assert mode06.tid_name(0x42) == "Reserved for future standardisation"
+    assert mode06.tid_name(0x83) == "Manufacturer defined"
+    assert mode06.tid_name(0xFE) == "Manufacturer defined"
+    assert mode06.tid_name(0xFF) == "Reserved by document"
+    assert mode06.tid_name(0x100) == "TID $100"  # out of byte range → fallback
+
+
+def test_test_result_test_name():
+    results = mode06.parse_test_results("46 01 01 0A 06 60 06 60 06 60")
+    assert results[0].test_name == "Rich-to-lean sensor threshold voltage (constant)"
+
+
 def test_two_records():
     text = (
         "46 01 01 0A 06 60 06 60 06 60"  # 9 bytes

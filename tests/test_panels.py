@@ -101,6 +101,7 @@ def test_mode06_panel_fills_table(qapp):
     table = panel.findChildren(QTableWidget)[0]
     assert table.rowCount() == 1
     assert table.item(0, 0).text() == "Oxygen Sensor Monitor Bank 1 - Sensor 1"
+    assert table.item(0, 1).text() == "Rich-to-lean sensor threshold voltage (constant)"
     assert table.item(0, 2).text() == "0.199104"
     assert table.item(0, 6).text() == "PASS"
     assert panel._count_label.text() == "1 test(s)"

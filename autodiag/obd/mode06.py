@@ -2,7 +2,8 @@
 
 Record layout per SAE J1979 §6.6 (9 bytes after the ``46`` SID echo):
 ``[OBDMID][TID][UASID][value hi/lo][min hi/lo][max hi/lo]``.
-MID names: Appendix D. Unit/scaling: Appendix E.
+MID names: Appendix D. Unit/scaling: Appendix E. TID names: §6.6.3.3
+Table 157 (same wording as Appendix C for service $05 TIDs).
 """
 
 from __future__ import annotations
@@ -61,6 +62,37 @@ def mid_name(mid: int) -> str:
     if 0xE1 <= mid <= 0xFF:
         return "Vehicle manufacturer defined"
     return f"Monitor ${mid:02X}"
+
+
+# -- Standardized Test IDs (J1979 §6.6.3.3, Table 157) -----------------------
+
+TID_NAMES: dict[int, str] = {
+    0x01: "Rich-to-lean sensor threshold voltage (constant)",
+    0x02: "Lean-to-rich sensor threshold voltage (constant)",
+    0x03: "Low sensor voltage for switch time calculation (constant)",
+    0x04: "High sensor voltage for switch time calculation (constant)",
+    0x05: "Rich-to-lean sensor switch time (calculated)",
+    0x06: "Lean-to-rich sensor switch time (calculated)",
+    0x07: "Minimum sensor voltage for test cycle (calculated)",
+    0x08: "Maximum sensor voltage for test cycle (calculated)",
+    0x09: "Time between sensor transitions (calculated)",
+    0x0A: "Sensor period (calculated)",
+    0x0B: "EWMA misfire counts for last 10 driving cycles (calculated)",
+    0x0C: "Misfire counts for last/current driving cycles (calculated)",
+}
+
+
+def tid_name(tid: int) -> str:
+    """Human name for a Test ID, including the range defaults of Table 157."""
+    if tid in TID_NAMES:
+        return TID_NAMES[tid]
+    if tid == 0x00 or tid == 0xFF:
+        return "Reserved by document"
+    if 0x0D <= tid <= 0x7F:
+        return "Reserved for future standardisation"
+    if 0x80 <= tid <= 0xFE:
+        return "Manufacturer defined"
+    return f"TID ${tid:02X}"
 
 
 # -- Unit And Scaling IDs (Appendix E) ---------------------------------------
@@ -161,6 +193,10 @@ class TestResult:
     @property
     def monitor_name(self) -> str:
         return mid_name(self.mid)
+
+    @property
+    def test_name(self) -> str:
+        return tid_name(self.tid)
 
     @property
     def passed(self) -> bool | None:

@@ -58,6 +58,10 @@ def test_build_report_content():
 
     assert report["freeze_frame"][0]["name"] == "Engine RPM"
     assert report["mode06"][0]["result"] == "PASS"
+    assert (
+        report["mode06"][0]["test"]
+        == "Rich-to-lean sensor threshold voltage (constant)"
+    )
     assert report["live_data"][0]["pid"] == "0C"
     assert report["live_data"][0]["value"] == 1726.0
 
@@ -77,6 +81,9 @@ def test_report_csv_sections():
     assert any(line.startswith("live_data,0C") for line in lines)
     assert any(line.startswith("readiness,mil_on") for line in lines)
     assert any(line.startswith("mode06,01-01") for line in lines)
+    assert any(
+        "Rich-to-lean sensor threshold voltage" in line for line in lines
+    )
 
 
 def test_write_report_selects_format_by_suffix(tmp_path):

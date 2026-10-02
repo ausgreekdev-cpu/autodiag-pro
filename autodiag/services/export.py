@@ -62,6 +62,7 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
             {
                 "mid": f"{result.mid:02X}",
                 "tid": f"{result.tid:02X}",
+                "test": result.test_name,
                 "monitor": result.monitor_name,
                 "value": result.value,
                 "min": result.min_value,
@@ -148,7 +149,10 @@ def report_to_csv(report: dict[str, Any]) -> str:
         add("freeze_frame", item["pid"], item["name"], f"{item['value']} {item['unit']}")
 
     for item in report["mode06"]:
-        detail = f"{item['value']} {item['unit']} [{item['min']} … {item['max']}] {item['result']}"
+        detail = (
+            f"{item['test']}: {item['value']} {item['unit']} "
+            f"[{item['min']} … {item['max']}] {item['result']}"
+        )
         add("mode06", f"{item['mid']}-{item['tid']}", item["monitor"], detail)
 
     for item in report["live_data"]:
