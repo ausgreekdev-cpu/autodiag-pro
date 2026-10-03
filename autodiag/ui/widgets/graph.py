@@ -6,8 +6,10 @@ from collections import deque
 from collections.abc import Iterable
 
 import pyqtgraph as pg
+from pyqtgraph.exporters import ImageExporter
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
+from autodiag.obd.pids import PID_REGISTRY
 from autodiag.ui import theme
 
 _BUFFER = 900  # points per series (~3.7 min at 4 req/s)
@@ -46,7 +48,10 @@ class LiveGraph(QWidget):
 
         for index, pid in enumerate(pids):
             color = theme.SERIES_COLORS[index % len(theme.SERIES_COLORS)]
-            curve = pg.PlotDataItem(pen=pg.mkPen(color, width=2))
+            definition = PID_REGISTRY.get(pid)
+            curve = pg.PlotDataItem(
+                pen=pg.mkPen(color, width=2), name=_series_label(pid, definition)
+            )
             self._plot.addItem(curve)
             self._curves[pid] = curve
             self._xs[pid] = deque(maxlen=_BUFFER)
@@ -74,3 +79,14 @@ class LiveGraph(QWidget):
     def reset(self) -> None:
         """Disconnect: drop all series and history."""
         self.set_active([])
+
+    def export_to(self, path: str) -> None:
+        """Save the current plot (axes, grid, legend, curves) as an image."""
+        exporter = ImageExporter(self._plot.getPlotItem())
+        exporter.export(str(path))
+
+
+def _series_label(pid: int, definition: object) -> str:
+    name = getattr(definition, "name", None) or f"PID {pid:02X}"
+    unit = getattr(definition, "unit", "")
+    return f"{name} [{unit}]" if unit else name

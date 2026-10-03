@@ -6,10 +6,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QPushButton,
     QSpinBox,
     QSplitter,
     QTableWidget,
@@ -151,9 +153,16 @@ class DashboardPanel(QWidget):
         graph_layout = QVBoxLayout(graph_box)
         graph_layout.setContentsMargins(0, 0, 0, 0)
         graph_layout.setSpacing(8)
+        graph_top = QHBoxLayout()
         graph_hint = QLabel("Tick parameters to graph them")
         graph_hint.setObjectName("subtle")
-        graph_layout.addWidget(graph_hint)
+        graph_top.addWidget(graph_hint)
+        graph_top.addStretch(1)
+        self._export_btn = QPushButton("Save image…")
+        self._export_btn.setToolTip("Export the current graph as a PNG")
+        self._export_btn.clicked.connect(self._export_graph)
+        graph_top.addWidget(self._export_btn)
+        graph_layout.addLayout(graph_top)
         self._graph = LiveGraph()
         graph_layout.addWidget(self._graph, 1)
 
@@ -293,6 +302,16 @@ class DashboardPanel(QWidget):
             self._pid_count_label.setText(f"{total} parameters")
         else:
             self._pid_count_label.setText(f"{visible} / {total} parameters")
+
+    def _export_graph(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save graph image",
+            "autodiag-graph.png",
+            "PNG image (*.png)",
+        )
+        if path:
+            self._graph.export_to(path)
 
     # -- helpers ---------------------------------------------------------------------
 

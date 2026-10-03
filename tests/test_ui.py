@@ -59,6 +59,42 @@ def test_live_graph_records_active_series_only(qapp):
     assert graph.active_pids() == []
 
 
+def test_live_graph_legend_names_series(qapp):
+    graph = LiveGraph()
+    graph.set_active([0x0C, 0x114])
+    assert graph._curves[0x0C].opts["name"] == "Engine RPM [rpm]"
+    assert graph._curves[0x114].opts["name"] == "O2 sensor B1S1 STFT [%]"
+
+
+def test_live_graph_export_writes_png(qapp, tmp_path):
+    graph = LiveGraph()
+    graph.set_active([0x0C])
+    graph.add_point(0x0C, 1726.0, 100.0)
+    target = tmp_path / "graph.png"
+    graph.export_to(str(target))
+    assert target.exists()
+    assert target.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_dashboard_save_image_dialog_writes_png(qapp, tmp_path, monkeypatch):
+    from autodiag.ui.panels import dashboard as dashboard_mod
+
+    worker = ObdWorker()
+    panel = DashboardPanel(worker)
+    worker.pids_supported.emit({0x0C})
+    target = tmp_path / "dash.png"
+
+    class _Dialog:
+        @staticmethod
+        def getSaveFileName(*_args, **_kwargs):
+            return str(target), "PNG image (*.png)"
+
+    monkeypatch.setattr(dashboard_mod, "QFileDialog", _Dialog)
+    panel._export_graph()
+    assert target.exists()
+    assert target.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
 def test_dashboard_builds_table_and_graphs_rpm_by_default(qapp):
     worker = ObdWorker()
     panel = DashboardPanel(worker)
