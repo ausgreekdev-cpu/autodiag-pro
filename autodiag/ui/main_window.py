@@ -150,6 +150,9 @@ class MainWindow(QMainWindow):
         status = QStatusBar()
         status.setSizeGripEnabled(False)
         self.setStatusBar(status)
+        self._state_label = QLabel("Ready")
+        self._state_label.setObjectName("conn-state")
+        status.addWidget(self._state_label)
         status.showMessage("Ready — select a port and connect.", 0)
 
     def _wire_worker(self) -> None:
@@ -158,6 +161,7 @@ class MainWindow(QMainWindow):
         worker.error.connect(lambda msg: self.statusBar().showMessage(f"Error: {msg}", 8000))
         worker.connected.connect(self._on_connected)
         worker.disconnected.connect(self._on_disconnected)
+        worker.reconnecting.connect(self._on_reconnecting)
         worker.voltage.connect(self._on_voltage)
 
         # feed the exportable scan record (same events the panels consume)
@@ -235,11 +239,13 @@ class MainWindow(QMainWindow):
             return
         self._connect_btn.setEnabled(False)
         self._connect_btn.setText("Connecting…")
+        self._state_label.setText("Connecting…")
         self.statusBar().showMessage(f"Connecting to {device}…", 0)
         self.worker.connect_to(device)
 
     def _on_connected(self, info: SessionInfo) -> None:
         self._connected = True
+        self._state_label.setText("Connected")
         self._connect_btn.setEnabled(True)
         self._connect_btn.setText("Disconnect")
         self._port_combo.setEnabled(False)
@@ -253,6 +259,7 @@ class MainWindow(QMainWindow):
 
     def _on_disconnected(self, reason: str) -> None:
         self._connected = False
+        self._state_label.setText("Disconnected")
         self._connect_btn.setEnabled(True)
         self._connect_btn.setText("Connect")
         self._port_combo.setEnabled(True)
@@ -266,6 +273,12 @@ class MainWindow(QMainWindow):
 
     def _on_voltage(self, volts: float) -> None:
         self._voltage_label.setText(f"{volts:.1f} V")
+
+    def _on_reconnecting(self, attempt: int, maximum: int) -> None:
+        if attempt <= 0 or maximum <= 0:
+            self._state_label.setText("Reconnect failed")
+        else:
+            self._state_label.setText(f"Reconnecting ({attempt}/{maximum})…")
 
     # -- lifecycle ------------------------------------------------------------------
 

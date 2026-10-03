@@ -173,6 +173,7 @@ def test_transport_error_during_poll_schedules_reconnect():
     assert engine.reconnect_pending
     assert not engine.connected
     assert any("reconnecting in 1s" in m for m, in sink.of("status"))
+    assert sink.of("reconnecting") == [(1, 5)]
 
     clock["t"] = 2.0  # first backoff elapsed
     assert engine.step(0.0)
@@ -227,6 +228,8 @@ def test_reconnect_backoff_gives_up_after_five_attempts():
     assert any("giving up" in m for m, in sink.of("error"))
     assert any("(1/5)" in m and "2s" in m for m, in sink.of("status"))
     assert any("(4/5)" in m and "15s" in m for m, in sink.of("status"))
+    # UI-facing progress: one event per scheduled attempt, then (0, 0) = gave up
+    assert sink.of("reconnecting") == [(1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (0, 0)]
 
 
 def test_manual_disconnect_cancels_reconnect():
@@ -258,6 +261,7 @@ def test_manual_disconnect_cancels_reconnect():
     engine.submit("disconnect", None)
     engine.step(0.0)
     assert not engine.reconnect_pending
+    assert sink.of("reconnecting") == [(1, 5)]  # cancel emits no extra events
 
     state["fail"] = False
     calls_before = calls["n"]

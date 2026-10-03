@@ -32,6 +32,7 @@ class ObdWorker(QThread):
     mids_supported = Signal(object)  # set[int]
     mode06 = Signal(object)  # list[TestResult]
     voltage = Signal(float)
+    reconnecting = Signal(int, int)  # (attempt about to run, max); (0, 0) = gave up
 
     _EVENT_KINDS = (
         "status",
@@ -50,6 +51,7 @@ class ObdWorker(QThread):
         "mids_supported",
         "mode06",
         "voltage",
+        "reconnecting",
     )
 
     def __init__(self, connector: Connector | None = None, parent: Any = None) -> None:

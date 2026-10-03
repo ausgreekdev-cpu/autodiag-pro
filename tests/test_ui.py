@@ -221,3 +221,31 @@ def test_main_window_auto_connect_only_with_saved_port(qapp, tmp_path, monkeypat
     idle = MainWindow(prefs=prefs2)
     assert idle._connect_btn.text() == "Connect"
     idle.close()
+
+
+def test_main_window_connection_state_label(qapp, tmp_path, monkeypatch):
+    from autodiag.transports.serial_transport import SerialPortInfo
+
+    monkeypatch.setattr(
+        "autodiag.ui.main_window.list_serial_ports",
+        lambda: [SerialPortInfo("/dev/ttyUSB7", "FTDI")],
+    )
+    window = MainWindow(prefs=_fresh_prefs(tmp_path))
+    label = window.findChildren(QLabel, "conn-state")[0]
+    assert label.text() == "Ready"
+
+    window._on_connect_clicked()
+    assert label.text() == "Connecting…"
+
+    window.worker.connected.emit(_INFO)
+    assert label.text() == "Connected"
+
+    window.worker.disconnected.emit("Adapter unplugged")
+    assert label.text() == "Disconnected"
+
+    window.worker.reconnecting.emit(2, 5)
+    assert label.text() == "Reconnecting (2/5)…"
+
+    window.worker.reconnecting.emit(0, 0)
+    assert label.text() == "Reconnect failed"
+    window.close()

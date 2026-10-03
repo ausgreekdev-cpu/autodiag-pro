@@ -337,6 +337,7 @@ class ObdEngine:
         delay = _RECONNECT_BACKOFF[0]
         self._reconnect_at = self._clock() + delay
         self._emit("status", f"Connection lost — reconnecting in {delay:g}s")
+        self._emit("reconnecting", 1, len(_RECONNECT_BACKOFF))
 
     def _cancel_reconnect(self) -> None:
         self._reconnect_device = None
@@ -362,6 +363,7 @@ class ObdEngine:
             self._reconnect_attempts = attempt + 1
             if self._reconnect_attempts >= len(_RECONNECT_BACKOFF):
                 self._emit("error", f"Reconnect failed: {exc} — giving up")
+                self._emit("reconnecting", 0, 0)
                 self._cancel_reconnect()
                 return
             delay = _RECONNECT_BACKOFF[self._reconnect_attempts]
@@ -370,6 +372,11 @@ class ObdEngine:
                 "status",
                 f"Reconnect failed ({self._reconnect_attempts}/"
                 f"{len(_RECONNECT_BACKOFF)}) — retrying in {delay:g}s",
+            )
+            self._emit(
+                "reconnecting",
+                self._reconnect_attempts + 1,
+                len(_RECONNECT_BACKOFF),
             )
             return
         self._emit(
