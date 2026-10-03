@@ -34,6 +34,10 @@ port (USB cable or paired Bluetooth SPP dongle).
   restored on launch; tick *Auto* in the toolbar to reconnect without clicking
 - **Find parameters fast** — dashboard search (name or hex PID) + category filter
 - **Graph snapshots** — save the live graph as a PNG (*Save image…*)
+- **Every ECU's codes** — multi-ECU mode $03/$07/$0A replies are parsed per
+  message, so a second ECU never produces phantom DTCs
+- **Session history** — every scan auto-saves to disk on close (last 50 kept);
+  browse, preview, re-export as JSON/CSV, or delete
 
 Fully offline: no accounts, no servers — everything runs on your machine.
 
@@ -61,6 +65,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 6. Diagnostic panels + settings + export | done |
 | 7. Packaging (PyInstaller) + docs | done |
 | 8. Persistence + UX polish (v0.3.0) | done |
+| 9. Decoder hardening + session history (v0.4.0) | done |
 
 ## Install & run
 
@@ -94,6 +99,9 @@ autodiag            # or: python -m autodiag
    read any of frames 0–2 and keeps each frame cached for comparison.
 6. **Settings** — export the whole session (VIN, codes, monitors, Mode $06, latest
    readings) as JSON or CSV.
+7. **History** — past sessions appear here automatically when you close the app
+   (the newest 50 are kept). Select one to preview it, re-export it as JSON/CSV,
+   or delete it.
 
 ## Development
 
@@ -103,7 +111,9 @@ pytest -q           # unit tests (no hardware needed — ELM327 fakes)
 ```
 
 Tests run entirely against scripted fake adapters (`tests/fakes.py`), so no OBD
-hardware is required. UI tests use Qt's offscreen platform.
+hardware is required. UI tests use Qt's offscreen platform. Seeded fuzz tests
+(`tests/test_fuzz_decoders.py`) hammer every decoder with random garbage —
+fixed seed, reproducible, contract-checked return types.
 
 ## Packaging a standalone executable
 
