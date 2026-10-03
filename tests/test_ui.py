@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QLabel, QPushButton, QStackedWidget
 
 from autodiag.obd.elm327 import SessionInfo
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.main_window import MainWindow
 from autodiag.ui.panels.dashboard import DashboardPanel
+from autodiag.ui.prefs import Prefs
 from autodiag.ui.widgets.gauge import Gauge
 from autodiag.ui.widgets.graph import LiveGraph
 
@@ -24,6 +25,11 @@ def _button(window: MainWindow, text: str) -> QPushButton:
     matches = [b for b in window.findChildren(QPushButton) if b.text() == text]
     assert matches, f"no button labelled {text!r}"
     return matches[0]
+
+
+def _fresh_prefs(tmp_path, name: str = "prefs.ini") -> Prefs:
+    settings = QSettings(str(tmp_path / name), QSettings.Format.IniFormat)
+    return Prefs(settings)
 
 
 def test_gauge_renders_value_and_empty_state(qapp):
@@ -85,8 +91,8 @@ def test_dashboard_graph_selection_follows_checkbox(qapp):
     assert set(panel._graph.active_pids()) == {0x0C, 0x0D}
 
 
-def test_main_window_navigation(qapp):
-    window = MainWindow()
+def test_main_window_navigation(qapp, tmp_path):
+    window = MainWindow(prefs=_fresh_prefs(tmp_path))
     stack = window.findChildren(QStackedWidget)[0]
     assert stack.count() == 7
 
@@ -104,8 +110,8 @@ def test_main_window_navigation(qapp):
     window.close()
 
 
-def test_main_window_connect_button_and_voltage_flow(qapp):
-    window = MainWindow()
+def test_main_window_connect_button_and_voltage_flow(qapp, tmp_path):
+    window = MainWindow(prefs=_fresh_prefs(tmp_path))
     worker = window.worker
 
     assert _button(window, "Connect").text() == "Connect"
@@ -124,8 +130,94 @@ def test_main_window_connect_button_and_voltage_flow(qapp):
     window.close()
 
 
-def test_main_window_close_shuts_down_worker(qapp):
-    window = MainWindow()
+def test_main_window_close_shuts_down_worker(qapp, tmp_path):
+    window = MainWindow(prefs=_fresh_prefs(tmp_path))
     window.worker.start()
     window.close()
     assert not window.worker.isRunning()
+
+
+def test_main_window_restores_port_panel_and_interval(qapp, tmp_path, monkeypatch):
+    from autodiag.transports.serial_transport import SerialPortInfo
+
+    monkeypatch.setattr(
+        "autodiag.ui.main_window.list_serial_ports",
+        lambda: [SerialPortInfo("/dev/ttyUSB7", "FTDI")],
+    )
+    prefs = _fresh_prefs(tmp_path)
+    prefs.set_last_port("/dev/ttyUSB7")
+    prefs.set_panel_index(2)
+    prefs.set_poll_interval_ms(600)
+    prefs.sync()
+
+    window = MainWindow(prefs=prefs)
+    stack = window.findChildren(QStackedWidget)[0]
+    assert stack.currentIndex() == 2
+    assert _button(window, "Readiness").isChecked()
+    assert window._port_combo.currentData() == "/dev/ttyUSB7"
+    assert window._dashboard._interval_spin.value() == 600
+
+    # the restored interval must have been queued to the engine at startup
+    jobs = []
+    while not window.worker.engine._jobs.empty():
+        jobs.append(window.worker.engine._jobs.get_nowait())
+    assert ("set_poll", (None, 0.6)) in jobs
+    window.close()
+
+
+def test_main_window_saves_and_restores_layout(qapp, tmp_path, monkeypatch):
+    from autodiag.transports.serial_transport import SerialPortInfo
+
+    monkeypatch.setattr(
+        "autodiag.ui.main_window.list_serial_ports",
+        lambda: [SerialPortInfo("/dev/ttyUSB9", "FTDI")],
+    )
+    prefs = _fresh_prefs(tmp_path)
+
+    window = MainWindow(prefs=prefs)
+    index = window._port_combo.findData("/dev/ttyUSB9")
+    assert index >= 0
+    window._port_combo.setCurrentIndex(index)
+    window.show_panel(3)
+    window.resize(1100, 700)
+    window.close()
+
+    assert prefs.last_port() == "/dev/ttyUSB9"
+    assert prefs.panel_index() == 3
+    assert prefs.window_geometry() is not None
+
+    reopened = MainWindow(prefs=prefs)
+    assert reopened._port_combo.currentData() == "/dev/ttyUSB9"
+    assert reopened._stack.currentIndex() == 3
+    # geometry round-trip: height must come back; offscreen's 800px screen
+    # clamps the restored width down to the 960 minimum
+    assert reopened.size().height() == 700
+    reopened.close()
+
+
+def test_main_window_auto_connect_only_with_saved_port(qapp, tmp_path, monkeypatch):
+    from autodiag.transports.serial_transport import SerialPortInfo
+
+    monkeypatch.setattr(
+        "autodiag.ui.main_window.list_serial_ports",
+        lambda: [SerialPortInfo("/dev/ttyUSB7", "FTDI")],
+    )
+    prefs = _fresh_prefs(tmp_path)
+    prefs.set_last_port("/dev/ttyUSB7")
+    prefs.set_auto_connect(True)
+    prefs.sync()
+
+    window = MainWindow(prefs=prefs)
+    assert window._auto_chk.isChecked()
+    assert window._connect_btn.text() == "Connecting…"
+    assert not window._connect_btn.isEnabled()
+    window.close()
+
+    # auto-connect armed but the saved port is gone → stays idle
+    prefs2 = _fresh_prefs(tmp_path, "second.ini")
+    prefs2.set_last_port("/dev/gone")
+    prefs2.set_auto_connect(True)
+    prefs2.sync()
+    idle = MainWindow(prefs=prefs2)
+    assert idle._connect_btn.text() == "Connect"
+    idle.close()

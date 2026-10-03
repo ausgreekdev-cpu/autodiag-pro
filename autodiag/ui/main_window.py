@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QHBoxLayout,
     QLabel,
@@ -28,15 +29,21 @@ from autodiag.ui.panels.readiness import ReadinessPanel
 from autodiag.ui.panels.settings import SettingsPanel
 from autodiag.ui.panels.trouble_codes import TroubleCodesPanel
 from autodiag.ui.panels.vehicle import VehicleInfoPanel
+from autodiag.ui.prefs import Prefs
 
 
 class MainWindow(QMainWindow):
     """Shell around the diagnostic panels; owns the OBD worker."""
 
-    def __init__(self, worker: ObdWorker | None = None) -> None:
+    def __init__(
+        self,
+        worker: ObdWorker | None = None,
+        prefs: Prefs | None = None,
+    ) -> None:
         super().__init__()
         self.worker = worker or ObdWorker()
         self.record = ScanRecord()
+        self._prefs = prefs if prefs is not None else Prefs()
         self._connected = False
 
         self.setWindowTitle("AutoDiag Pro")
@@ -47,11 +54,13 @@ class MainWindow(QMainWindow):
         self._build_central()
         self._build_statusbar()
         self._wire_worker()
+        self._restore_prefs()
 
     # -- construction -----------------------------------------------------------
 
     def _build_toolbar(self) -> None:
         bar = QToolBar("Connection")
+        bar.setObjectName("Connection")
         bar.setMovable(False)
         bar.setFloatable(False)
         self.addToolBar(bar)
@@ -69,6 +78,12 @@ class MainWindow(QMainWindow):
         self._connect_btn.setObjectName("primary")
         self._connect_btn.clicked.connect(self._on_connect_clicked)
         bar.addWidget(self._connect_btn)
+
+        self._auto_chk = QCheckBox("Auto")
+        self._auto_chk.setToolTip("Reconnect to the last port on launch")
+        self._auto_chk.setChecked(self._prefs.auto_connect())
+        self._auto_chk.toggled.connect(self._prefs.set_auto_connect)
+        bar.addWidget(self._auto_chk)
 
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -91,7 +106,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(0)
 
         self._stack = QStackedWidget()
-        self._dashboard = DashboardPanel(self.worker)
+        self._dashboard = DashboardPanel(self.worker, self._prefs)
         self._stack.addWidget(self._dashboard)
         self._stack.addWidget(TroubleCodesPanel(self.worker))
         self._stack.addWidget(ReadinessPanel(self.worker))
@@ -164,6 +179,7 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(index)
         for i, button in enumerate(self._nav_buttons):
             button.setChecked(i == index)
+        self._prefs.set_panel_index(index)
 
     def refresh_ports(self) -> None:
         current = self._port_combo.currentData()
@@ -177,6 +193,33 @@ class MainWindow(QMainWindow):
             index = self._port_combo.findData(current)
             if index >= 0:
                 self._port_combo.setCurrentIndex(index)
+
+    # -- preferences -------------------------------------------------------------
+
+    def _restore_prefs(self) -> None:
+        geometry = self._prefs.window_geometry()
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+        state = self._prefs.window_state()
+        if state is not None:
+            self.restoreState(state)
+
+        panel = self._prefs.panel_index()
+        if 0 <= panel < self._stack.count() and panel != self._stack.currentIndex():
+            self.show_panel(panel)
+
+        saved_port = self._prefs.last_port()
+        port_available = False
+        if saved_port is not None:
+            index = self._port_combo.findData(saved_port)
+            if index >= 0:
+                self._port_combo.setCurrentIndex(index)
+                port_available = True
+
+        if self._prefs.auto_connect() and port_available:
+            device = self._port_combo.currentData()
+            self.statusBar().showMessage(f"Auto-connecting to {device}…", 0)
+            self._on_connect_clicked()
 
     # -- slots --------------------------------------------------------------------
 
@@ -228,5 +271,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 — Qt naming
         self.statusBar().showMessage("Shutting down…", 0)
+        self._prefs.set_last_port(self._port_combo.currentData())
+        self._prefs.set_window_geometry(self.saveGeometry())
+        self._prefs.set_window_state(self.saveState())
+        self._prefs.sync()
         self.worker.shutdown(5000)
         event.accept()

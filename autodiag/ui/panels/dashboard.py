@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from autodiag.obd.pids import PID_REGISTRY, request_pid
 from autodiag.services.worker import ObdWorker
+from autodiag.ui.prefs import Prefs
 from autodiag.ui.widgets.gauge import Gauge
 from autodiag.ui.widgets.graph import LiveGraph
 
@@ -32,14 +33,22 @@ _COL_GRAPH, _COL_PID, _COL_NAME, _COL_VALUE, _COL_UNIT = range(5)
 class DashboardPanel(QWidget):
     """Live-data hub: subscribes to the worker's PID signals itself."""
 
-    def __init__(self, worker: ObdWorker, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        worker: ObdWorker,
+        prefs: Prefs | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._worker = worker
+        self._prefs = prefs if prefs is not None else Prefs()
         self._connected = False
         self._rows: dict[int, int] = {}  # pid → table row
         self._gauge_for_pid: dict[int, Gauge] = {}
 
         self._build_ui()
+        # the restored interval must reach the engine even if untouched later
+        self._worker.set_poll(None, self._interval_spin.value() / 1000.0)
         worker.connected.connect(self.on_connected)
         worker.disconnected.connect(self.on_disconnected)
         worker.pids_supported.connect(self.on_pids_supported)
@@ -87,7 +96,7 @@ class DashboardPanel(QWidget):
         self._interval_spin = QSpinBox()
         self._interval_spin.setRange(50, 5000)
         self._interval_spin.setSingleStep(50)
-        self._interval_spin.setValue(250)
+        self._interval_spin.setValue(self._prefs.poll_interval_ms())
         self._interval_spin.setSuffix(" ms")
         self._interval_spin.setToolTip("Delay between PID requests")
         self._interval_spin.valueChanged.connect(self._on_interval_changed)
@@ -237,8 +246,9 @@ class DashboardPanel(QWidget):
         self._graph.set_active(sorted(selected))
 
     def _on_interval_changed(self, value_ms: int) -> None:
-        if self._connected:
-            self._worker.set_poll(None, value_ms / 1000.0)
+        self._prefs.set_poll_interval_ms(value_ms)
+        # safe while disconnected too: the engine just parks the new interval
+        self._worker.set_poll(None, value_ms / 1000.0)
 
     # -- helpers ---------------------------------------------------------------------
 
