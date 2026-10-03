@@ -38,6 +38,9 @@ port (USB cable or paired Bluetooth SPP dongle).
   message, so a second ECU never produces phantom DTCs
 - **Session history** — every scan auto-saves to disk on close (last 50 kept);
   browse, preview, re-export as JSON/CSV, or delete
+- **Time-series CSV logs** — every polled value streams into a timestamped CSV
+  (*Log*, on by default; newest 50 kept) and the matching history session links
+  back to it
 
 Fully offline: no accounts, no servers — everything runs on your machine.
 
@@ -66,6 +69,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 7. Packaging (PyInstaller) + docs | done |
 | 8. Persistence + UX polish (v0.3.0) | done |
 | 9. Decoder hardening + session history (v0.4.0) | done |
+| 10. Live-data CSV logger (v0.5.0) | done |
 
 ## Install & run
 
@@ -89,9 +93,11 @@ autodiag            # or: python -m autodiag
 3. **Dashboard** — gauges and the value table update live; the poll interval (default
    250 ms) controls request spacing. Tick rows to graph those parameters, use
    *Filter parameters…* / the category dropdown to narrow the table, and *Save
-   image…* to export the graph as a PNG. Failed PIDs are dropped automatically after
-   3 timeouts, and a lost adapter connection is retried by itself (1 s → 15 s
-   backoff, 5 attempts).
+   image…* to export the graph as a PNG. The *Log* checkbox (on by default) appends
+   every polled value to a CSV in the app-data `logs/` folder — the label beside it
+   shows the current file and row count; untick it to stop. Failed PIDs are dropped
+   automatically after 3 timeouts, and a lost adapter connection is retried by itself
+   (1 s → 15 s backoff, 5 attempts).
 4. **Trouble codes** — press *Read codes*; switch tabs for pending/permanent.
    *Clear codes* asks for confirmation first.
 5. **Readiness / Freeze frame / Vehicle info / Mode $06** — each panel has its own
@@ -101,7 +107,7 @@ autodiag            # or: python -m autodiag
    readings) as JSON or CSV.
 7. **History** — past sessions appear here automatically when you close the app
    (the newest 50 are kept). Select one to preview it, re-export it as JSON/CSV,
-   or delete it.
+   or delete it; the *Log* column shows which sessions have a CSV time series.
 
 ## Development
 
