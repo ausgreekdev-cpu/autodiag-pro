@@ -91,6 +91,51 @@ def test_dashboard_graph_selection_follows_checkbox(qapp):
     assert set(panel._graph.active_pids()) == {0x0C, 0x0D}
 
 
+def test_dashboard_filters_by_text_and_category(qapp):
+    worker = ObdWorker()
+    panel = DashboardPanel(worker)
+    worker.pids_supported.emit({0x0C, 0x0D, 0x05, 0x04, 0x06, 0x07})
+    assert panel.visible_count() == 6
+    assert panel._pid_count_label.text() == "6 parameters"
+
+    panel._filter_edit.setText("trim")
+    assert panel.visible_count() == 2  # short + long term fuel trim
+    assert panel._pid_count_label.text() == "2 / 6 parameters"
+
+    rows_before = dict(panel._rows)
+    panel._filter_edit.setText("0D")  # hex PID match, case-insensitive
+    assert panel.visible_count() == 1
+    assert panel._rows == rows_before  # hiding never reorders rows
+
+    panel._filter_edit.clear()
+    fuel = panel._category_combo.findData("fuel")
+    assert fuel >= 0
+    panel._category_combo.setCurrentIndex(fuel)
+    assert panel.visible_count() == 2  # 0x06, 0x07
+
+    panel._filter_edit.setText("speed")  # + fuel → no overlap
+    assert panel.visible_count() == 0
+    assert panel._pid_count_label.text() == "0 / 6 parameters"
+
+
+def test_dashboard_filter_survives_reconnect_and_keeps_check_state(qapp):
+    worker = ObdWorker()
+    panel = DashboardPanel(worker)
+    worker.pids_supported.emit({0x0C, 0x0D, 0x05})
+    panel._filter_edit.setText("vehicle")
+    assert panel.visible_count() == 1  # only 0x0D "Vehicle speed"
+
+    assert panel.is_graphed(0x0C)  # hidden row stays checked
+    assert set(panel._graph.active_pids()) == {0x0C}
+
+    worker.pids_supported.emit({0x0C, 0x0D, 0x05})  # reconnect rebuilds rows
+    assert panel.visible_count() == 1  # filter re-applied
+    assert panel._pid_count_label.text() == "1 / 3 parameters"
+
+    panel._filter_edit.clear()
+    assert panel.visible_count() == 3
+
+
 def test_main_window_navigation(qapp, tmp_path):
     window = MainWindow(prefs=_fresh_prefs(tmp_path))
     stack = window.findChildren(QStackedWidget)[0]

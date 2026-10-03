@@ -5,9 +5,11 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QSpinBox,
     QSplitter,
     QTableWidget,
@@ -110,6 +112,21 @@ class DashboardPanel(QWidget):
         controls.addWidget(self._pid_count_label)
         table_layout.addLayout(controls)
 
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(6)
+        self._filter_edit = QLineEdit()
+        self._filter_edit.setPlaceholderText("Filter parameters…")
+        self._filter_edit.setClearButtonEnabled(True)
+        self._filter_edit.textChanged.connect(self._apply_filter)
+        self._category_combo = QComboBox()
+        self._category_combo.addItem("All categories", "")
+        for category in sorted({d.category for d in PID_REGISTRY.values()}):
+            self._category_combo.addItem(category.title(), category)
+        self._category_combo.currentIndexChanged.connect(self._apply_filter)
+        filter_row.addWidget(self._filter_edit, 1)
+        filter_row.addWidget(self._category_combo)
+        table_layout.addLayout(filter_row)
+
         self._table = QTableWidget(0, 5)
         self._table.setHorizontalHeaderLabels(["", "PID", "Parameter", "Value", "Unit"])
         self._table.setAlternatingRowColors(True)
@@ -194,13 +211,14 @@ class DashboardPanel(QWidget):
                 if pid == gauge_pid:
                     self._gauge_for_pid[pid] = gauge
 
-        self._pid_count_label.setText(f"{len(supported)} parameters")
         self._table.blockSignals(False)
 
         # default graph selection: engine speed (when present)
         if 0x0C in self._rows:
             check_item = self._table.item(self._rows[0x0C], _COL_GRAPH)
             check_item.setCheckState(Qt.CheckState.Checked)  # fires itemChanged
+
+        self._apply_filter()  # re-hide rows if a filter survived the rebuild
 
     def on_pid_value(self, pid: int, value: float, timestamp: float) -> None:
         gauge = self._gauge_for_pid.get(pid)
@@ -219,6 +237,9 @@ class DashboardPanel(QWidget):
 
     def parameter_count(self) -> int:
         return self._table.rowCount()
+
+    def visible_count(self) -> int:
+        return sum(1 for row in self._rows.values() if not self._table.isRowHidden(row))
 
     def value_text(self, pid: int) -> str | None:
         row = self._rows.get(pid)
@@ -249,6 +270,29 @@ class DashboardPanel(QWidget):
         self._prefs.set_poll_interval_ms(value_ms)
         # safe while disconnected too: the engine just parks the new interval
         self._worker.set_poll(None, value_ms / 1000.0)
+
+    def _apply_filter(self) -> None:
+        """Hide non-matching rows in place (check state and gauges untouched)."""
+        needle = self._filter_edit.text().strip().lower()
+        category = self._category_combo.currentData()
+        visible = 0
+        for pid, row in self._rows.items():
+            definition = PID_REGISTRY.get(pid)
+            name = definition.name if definition else ""
+            hex_pid = f"{request_pid(pid):02X}".lower()
+            match_text = not needle or needle in name.lower() or needle in hex_pid
+            match_category = not category or (
+                definition is not None and definition.category == category
+            )
+            show = match_text and match_category
+            self._table.setRowHidden(row, not show)
+            if show:
+                visible += 1
+        total = len(self._rows)
+        if visible == total:
+            self._pid_count_label.setText(f"{total} parameters")
+        else:
+            self._pid_count_label.setText(f"{visible} / {total} parameters")
 
     # -- helpers ---------------------------------------------------------------------
 
