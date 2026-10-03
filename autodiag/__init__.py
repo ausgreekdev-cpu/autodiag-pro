@@ -1,3 +1,3 @@
 """AutoDiag Pro — OBD-II desktop diagnostics for ELM327 adapters."""
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"

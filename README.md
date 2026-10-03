@@ -26,10 +26,14 @@ port (USB cable or paired Bluetooth SPP dongle).
   frame 0/1/2 picker
 - **Vehicle info** — VIN, calibration IDs, CVN (`09`)
 - **Mode $06** — onboard test results (monitor + standardized test name vs. the
-  min/max limits the ECU used, PASS/FAIL)
+  min/max limits the ECU used, PASS/FAIL), with an *Only failures* filter
 - **Reports** — export everything collected to JSON or CSV
 - **Resilient link** — if the adapter drops mid-session the app reconnects by itself
-  (1–15 s backoff, up to 5 attempts)
+  (1–15 s backoff, up to 5 attempts) with live status in the window
+- **Remembers your setup** — last port, poll interval, panel and window layout are
+  restored on launch; tick *Auto* in the toolbar to reconnect without clicking
+- **Find parameters fast** — dashboard search (name or hex PID) + category filter
+- **Graph snapshots** — save the live graph as a PNG (*Save image…*)
 
 Fully offline: no accounts, no servers — everything runs on your machine.
 
@@ -56,6 +60,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 5. UI core (dashboard, gauges, live graph) | done |
 | 6. Diagnostic panels + settings + export | done |
 | 7. Packaging (PyInstaller) + docs | done |
+| 8. Persistence + UX polish (v0.3.0) | done |
 
 ## Install & run
 
@@ -73,11 +78,15 @@ autodiag            # or: python -m autodiag
    settings first (typical PIN `1234`/`0000`).
 2. **Pick the port** in the toolbar (press *Refresh* if it is not listed) and press
    **Connect**. The app auto-detects the baud rate, initializes the ELM327 and
-   discovers which PIDs the vehicle supports.
+   discovers which PIDs the vehicle supports. Tick *Auto* to reconnect to this port
+   automatically on the next launch — the poll interval and window layout are
+   remembered either way.
 3. **Dashboard** — gauges and the value table update live; the poll interval (default
-   250 ms) controls request spacing. Tick rows to graph those parameters. Failed PIDs
-   are dropped automatically after 3 timeouts, and a lost adapter connection is
-   retried by itself (1 s → 15 s backoff, 5 attempts).
+   250 ms) controls request spacing. Tick rows to graph those parameters, use
+   *Filter parameters…* / the category dropdown to narrow the table, and *Save
+   image…* to export the graph as a PNG. Failed PIDs are dropped automatically after
+   3 timeouts, and a lost adapter connection is retried by itself (1 s → 15 s
+   backoff, 5 attempts).
 4. **Trouble codes** — press *Read codes*; switch tabs for pending/permanent.
    *Clear codes* asks for confirmation first.
 5. **Readiness / Freeze frame / Vehicle info / Mode $06** — each panel has its own
