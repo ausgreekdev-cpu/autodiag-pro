@@ -81,6 +81,28 @@ def test_live_graph_export_writes_png(qapp, tmp_path):
     assert target.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_live_graph_bulk_set_series(qapp, tmp_path):
+    graph = LiveGraph()
+    graph.set_series(
+        {
+            0x0C: ([0.0, 0.5, 1.0], [812.0, 845.5, 901.0], "Engine RPM [rpm]"),
+            0x99: ([0.0, 1.0], [1.5, 2.5], "Mystery [value]"),
+        }
+    )
+    assert graph.active_pids() == [0x0C, 0x99]
+    xs, ys = graph._curves[0x0C].getData()
+    assert list(xs) == [0.0, 0.5, 1.0]
+    assert list(ys) == [812.0, 845.5, 901.0]
+    assert graph._curves[0x99].opts["name"] == "Mystery [value]"
+
+    target = tmp_path / "loaded.png"
+    graph.export_to(str(target))
+    assert target.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+    graph.set_series({0x0D: ([0.0], [60.0], "Vehicle speed [km/h]")})
+    assert graph.active_pids() == [0x0D]  # full replacement
+
+
 def test_dashboard_save_image_dialog_writes_png(qapp, tmp_path, monkeypatch):
     from autodiag.ui.panels import dashboard as dashboard_mod
 

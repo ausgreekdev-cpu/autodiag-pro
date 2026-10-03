@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 
 import pyqtgraph as pg
 from pyqtgraph.exporters import ImageExporter
@@ -59,6 +59,23 @@ class LiveGraph(QWidget):
 
     def active_pids(self) -> list[int]:
         return list(self._curves)
+
+    def set_series(
+        self, series: Mapping[int, tuple[Sequence[float], Sequence[float], str]]
+    ) -> None:
+        """Bulk-load static data (log viewer): pid → (xs, ys, legend label).
+
+        Unlike :meth:`set_active` + :meth:`add_point` this replaces
+        everything in one shot and does not ring-buffer — plotting a saved
+        file must show every point.
+        """
+        self.set_active([])
+        for index, (pid, (xs, ys, label)) in enumerate(series.items()):
+            color = theme.SERIES_COLORS[index % len(theme.SERIES_COLORS)]
+            curve = pg.PlotDataItem(pen=pg.mkPen(color, width=2), name=label)
+            curve.setData([float(x) for x in xs], [float(y) for y in ys])
+            self._plot.addItem(curve)
+            self._curves[pid] = curve
 
     def add_point(self, pid: int, value: float, timestamp: float) -> None:
         if pid not in self._curves:
