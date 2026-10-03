@@ -23,6 +23,8 @@ class ScanRecord:
     mode06: list[object] = field(default_factory=list)  # mode06.TestResult
     pids: dict[int, tuple[float, float]] = field(default_factory=dict)  # pid → (v, t)
     updated_at: datetime | None = None
+    log_file: str | None = None  # live-log basename (set at close, if logging)
+    log_rows: int = 0
 
     def record_event(self, kind: str, args: tuple) -> None:
         """Absorb one worker event (same dispatch the UI uses)."""

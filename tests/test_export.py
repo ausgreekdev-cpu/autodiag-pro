@@ -69,6 +69,18 @@ def test_build_report_content():
     assert report["live_data"][0]["value"] == 1726.0
 
 
+def test_build_report_links_live_log():
+    record = make_record()
+    assert "live_log" not in build_report(record)
+
+    record.log_file = "log-20260101-120000.csv"
+    record.log_rows = 42
+    report = build_report(record, now=_NOW)
+    assert report["live_log"] == {"file": "log-20260101-120000.csv", "rows": 42}
+    assert '"log-20260101-120000.csv"' in report_to_json(report)
+    assert "live_log" in report_to_csv(report)
+
+
 def test_report_json_roundtrip():
     text = report_to_json(build_report(make_record(), now=_NOW))
     data = json.loads(text)

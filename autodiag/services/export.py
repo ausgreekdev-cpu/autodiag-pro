@@ -89,7 +89,7 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
         )
 
     generated = now or datetime.now(UTC)
-    return {
+    report: dict[str, Any] = {
         "app": {"name": "AutoDiag Pro", "version": __version__},
         "generated_at": generated.isoformat(timespec="seconds"),
         "adapter": {
@@ -108,6 +108,9 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
         "mode06": mode06,
         "live_data": pids,
     }
+    if record.log_file:
+        report["live_log"] = {"file": record.log_file, "rows": record.log_rows}
+    return report
 
 
 def report_to_json(report: dict[str, Any]) -> str:
@@ -164,6 +167,10 @@ def report_to_csv(report: dict[str, Any]) -> str:
 
     for item in report["live_data"]:
         add("live_data", item["pid"], item["name"], f"{item['value']} {item['unit']}")
+
+    live_log = report.get("live_log")
+    if live_log:
+        add("live_log", str(live_log["file"]), "", str(live_log["rows"]))
 
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")

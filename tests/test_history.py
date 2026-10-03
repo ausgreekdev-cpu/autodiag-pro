@@ -148,6 +148,21 @@ def test_describe_report_highlights(tmp_path):
     assert "VIN:" not in empty
 
 
+def test_summary_and_describe_include_live_log(tmp_path):
+    record = make_record()
+    record.log_file = "log-20261003-120000.csv"
+    record.log_rows = 1234
+    report = build_report(record, now=datetime(2026, 10, 3, tzinfo=UTC))
+
+    store = SessionStore(tmp_path)
+    store.save(report, when=datetime(2026, 10, 3, tzinfo=UTC))
+    assert store.list()[0]["log_rows"] == 1234
+
+    text = describe_report(report)
+    assert "Log: log-20261003-120000.csv (1,234 rows)" in text
+    assert "Log:" not in describe_report(_report())  # absent → no line
+
+
 def test_record_has_data_gates_auto_save():
     record = ScanRecord()
     assert record_has_data(record) is False

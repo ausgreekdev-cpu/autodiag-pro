@@ -215,7 +215,10 @@ def test_settings_panel_mentions_dictionary_size(qapp):
 
 def _history_store(tmp_path) -> SessionStore:
     store = SessionStore(tmp_path)
-    report = build_report(make_record(), now=datetime(2026, 10, 3, 12, 30, tzinfo=UTC))
+    record = make_record()
+    record.log_file = "log-20261003-120000.csv"
+    record.log_rows = 1234
+    report = build_report(record, now=datetime(2026, 10, 3, 12, 30, tzinfo=UTC))
     store.save(report, when=datetime(2026, 10, 3, 12, 30, tzinfo=UTC))
     return store
 
@@ -233,6 +236,9 @@ def test_history_panel_lists_sessions(qapp, tmp_path):
     assert panel._table.item(0, 1).text() == "1D4GP00R56B123457"
     assert panel._table.item(0, 2).text() == "1"  # DTCs
     assert panel._table.item(0, 3).text() == "1"  # Mode $06
+    assert panel._table.item(0, 5).text() == "ELM327 v1.5"
+    assert panel._table.item(0, 6).text() == "—"  # newest session has no log
+    assert panel._table.item(1, 6).text() == "1,234"  # Log column rows
     assert panel._count_label.text() == "2 session(s)"
     assert not panel._export_json_btn.isEnabled()  # nothing selected yet
 
@@ -255,6 +261,7 @@ def test_history_panel_selection_previews_and_enables_actions(qapp, tmp_path):
     detail = panel._detail.toPlainText()
     assert "VIN: 1D4GP00R56B123457" in detail
     assert "P0301" in detail
+    assert "Log: log-20261003-120000.csv (1,234 rows)" in detail
 
     panel._table.clearSelection()
     assert panel._selected is None

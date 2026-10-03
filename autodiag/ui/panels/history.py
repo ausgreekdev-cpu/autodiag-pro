@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from autodiag.services.history import SessionStore, describe_report
 
-_COLUMNS = ("Date", "VIN", "DTCs", "Mode $06", "PIDs", "Adapter")
+_COLUMNS = ("Date", "VIN", "DTCs", "Mode $06", "PIDs", "Adapter", "Log")
 _JSON_FILTER = "JSON report (*.json)"
 _CSV_FILTER = "CSV report (*.csv)"
 
@@ -81,7 +81,7 @@ class HistoryPanel(QWidget):
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
-        for column in (2, 3, 4):
+        for column in (2, 3, 4, 6):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
         self._table.setColumnWidth(0, 160)
@@ -116,10 +116,11 @@ class HistoryPanel(QWidget):
                 str(summary["tests"]),
                 str(summary["pids"]),
                 summary["adapter"] or "—",
+                f"{summary['log_rows']:,}" if summary.get("log_rows") else "—",
             )
             for column, text in enumerate(values):
                 item = QTableWidgetItem(text)
-                if column in (2, 3, 4):
+                if column in (2, 3, 4, 6):
                     item.setTextAlignment(
                         Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
                     )

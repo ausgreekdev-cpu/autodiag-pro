@@ -135,6 +135,7 @@ def _summarize(name: str, report: dict[str, Any]) -> dict[str, Any]:
         "dtcs": sum(len(codes) for codes in dtcs.values() if isinstance(codes, list)),
         "tests": len(report.get("mode06") or []),
         "pids": len(report.get("live_data") or []),
+        "log_rows": int((report.get("live_log") or {}).get("rows") or 0),
     }
 
 
@@ -195,6 +196,11 @@ def describe_report(report: dict[str, Any]) -> str:
             lines.append(f"  {item.get('name')}: {item.get('value')} {item.get('unit')}")
         if len(live) > 12:
             lines.append(f"  … +{len(live) - 12} more")
+
+    live_log = report.get("live_log")
+    if live_log:
+        rows = int(live_log.get("rows") or 0)
+        lines.append(f"Log: {live_log.get('file')} ({rows:,} rows)")
 
     return "\n".join(lines)
 
