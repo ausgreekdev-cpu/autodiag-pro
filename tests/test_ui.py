@@ -175,7 +175,7 @@ def test_dashboard_filter_survives_reconnect_and_keeps_check_state(qapp):
 def test_main_window_navigation(qapp, tmp_path):
     window = MainWindow(prefs=_fresh_prefs(tmp_path))
     stack = window.findChildren(QStackedWidget)[0]
-    assert stack.count() == 7
+    assert stack.count() == 8
 
     window.show_panel(2)
     assert stack.currentIndex() == 2
@@ -330,3 +330,26 @@ def test_main_window_connection_state_label(qapp, tmp_path, monkeypatch):
     window.worker.reconnecting.emit(0, 0)
     assert label.text() == "Reconnect failed"
     window.close()
+
+
+def test_main_window_saves_session_on_close(qapp, tmp_path):
+    from autodiag.services.history import SessionStore
+
+    store = SessionStore(tmp_path)
+    window = MainWindow(prefs=_fresh_prefs(tmp_path), store=store)
+    window.record.record_event("pid_value", (0x0C, 1726.0, 1.0))
+    window.close()
+
+    summaries = store.list()
+    assert len(summaries) == 1
+    assert summaries[0]["pids"] == 1
+
+
+def test_main_window_close_skips_session_without_data(qapp, tmp_path):
+    from autodiag.services.history import SessionStore
+
+    store = SessionStore(tmp_path)
+    window = MainWindow(prefs=_fresh_prefs(tmp_path), store=store)
+    window.record.record_event("connected", (_INFO,))  # adapter info alone
+    window.close()
+    assert store.list() == []

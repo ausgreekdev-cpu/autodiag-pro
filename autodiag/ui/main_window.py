@@ -19,11 +19,14 @@ from PySide6.QtWidgets import (
 )
 
 from autodiag.obd.elm327 import SessionInfo
+from autodiag.services.export import build_report
+from autodiag.services.history import SessionStore, record_has_data
 from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
 from autodiag.transports.serial_transport import SerialPortInfo, list_serial_ports
 from autodiag.ui.panels.dashboard import DashboardPanel
 from autodiag.ui.panels.freeze import FreezeFramePanel
+from autodiag.ui.panels.history import HistoryPanel
 from autodiag.ui.panels.mode06 import Mode06Panel
 from autodiag.ui.panels.readiness import ReadinessPanel
 from autodiag.ui.panels.settings import SettingsPanel
@@ -39,11 +42,13 @@ class MainWindow(QMainWindow):
         self,
         worker: ObdWorker | None = None,
         prefs: Prefs | None = None,
+        store: SessionStore | None = None,
     ) -> None:
         super().__init__()
         self.worker = worker or ObdWorker()
         self.record = ScanRecord()
         self._prefs = prefs if prefs is not None else Prefs()
+        self._store = store if store is not None else SessionStore()
         self._connected = False
 
         self.setWindowTitle("AutoDiag Pro")
@@ -116,6 +121,7 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(
             SettingsPanel(self.record, lambda msg: self.statusBar().showMessage(msg, 8000))
         )
+        self._stack.addWidget(HistoryPanel(self._store))
 
         nav_items = (
             "Dashboard",
@@ -125,6 +131,7 @@ class MainWindow(QMainWindow):
             "Vehicle info",
             "Mode $06",
             "Settings",
+            "History",
         )
         nav = QWidget()
         nav.setFixedWidth(184)
@@ -284,6 +291,11 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 — Qt naming
         self.statusBar().showMessage("Shutting down…", 0)
+        if record_has_data(self.record):
+            try:
+                self._store.save(build_report(self.record))
+            except OSError as exc:
+                self.statusBar().showMessage(f"Could not save session: {exc}", 5000)
         self._prefs.set_last_port(self._port_combo.currentData())
         self._prefs.set_window_geometry(self.saveGeometry())
         self._prefs.set_window_state(self.saveState())

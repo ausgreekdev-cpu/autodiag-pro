@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from PySide6.QtWidgets import QLabel, QLineEdit, QTableWidget
 
 from autodiag.obd import mode06 as m06
 from autodiag.obd.mode06 import parse_test_results
 from autodiag.obd.readiness import parse_monitor_status
+from autodiag.services.export import build_report
+from autodiag.services.history import SessionStore
 from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.panels.freeze import FreezeFramePanel
+from autodiag.ui.panels.history import HistoryPanel
 from autodiag.ui.panels.mode06 import Mode06Panel
 from autodiag.ui.panels.readiness import ReadinessPanel
 from autodiag.ui.panels.settings import SettingsPanel
@@ -204,3 +209,110 @@ def test_settings_panel_mentions_dictionary_size(qapp):
     panel = SettingsPanel(ScanRecord(), lambda _msg: None)
     notes = [lb.text() for lb in panel.findChildren(QLabel)]
     assert any("codes bundled" in note for note in notes)
+
+
+# -- session history ---------------------------------------------------------------
+
+def _history_store(tmp_path) -> SessionStore:
+    store = SessionStore(tmp_path)
+    report = build_report(make_record(), now=datetime(2026, 10, 3, 12, 30, tzinfo=UTC))
+    store.save(report, when=datetime(2026, 10, 3, 12, 30, tzinfo=UTC))
+    return store
+
+
+def test_history_panel_lists_sessions(qapp, tmp_path):
+    store = _history_store(tmp_path)
+    store.save(
+        build_report(make_record(), now=datetime(2026, 10, 4, 8, 0, tzinfo=UTC)),
+        when=datetime(2026, 10, 4, 8, 0, tzinfo=UTC),
+    )
+    panel = HistoryPanel(store)
+
+    assert panel._table.rowCount() == 2
+    # newest first
+    assert panel._table.item(0, 1).text() == "1D4GP00R56B123457"
+    assert panel._table.item(0, 2).text() == "1"  # DTCs
+    assert panel._table.item(0, 3).text() == "1"  # Mode $06
+    assert panel._count_label.text() == "2 session(s)"
+    assert not panel._export_json_btn.isEnabled()  # nothing selected yet
+
+
+def test_history_panel_empty_state(qapp, tmp_path):
+    panel = HistoryPanel(SessionStore(tmp_path))
+    assert panel._table.rowCount() == 0
+    assert panel._count_label.text() == "No saved sessions yet"
+    assert not panel._delete_btn.isEnabled()
+
+
+def test_history_panel_selection_previews_and_enables_actions(qapp, tmp_path):
+    panel = HistoryPanel(_history_store(tmp_path))
+    panel._table.selectRow(0)
+
+    assert panel._selected is not None
+    assert panel._export_json_btn.isEnabled()
+    assert panel._export_csv_btn.isEnabled()
+    assert panel._delete_btn.isEnabled()
+    detail = panel._detail.toPlainText()
+    assert "VIN: 1D4GP00R56B123457" in detail
+    assert "P0301" in detail
+
+    panel._table.clearSelection()
+    assert panel._selected is None
+    assert not panel._export_csv_btn.isEnabled()
+
+
+def test_history_panel_export_writes_file(qapp, tmp_path, monkeypatch):
+    from autodiag.ui.panels import history as history_mod
+
+    panel = HistoryPanel(_history_store(tmp_path))
+    panel._table.selectRow(0)
+    target = tmp_path / "copy.csv"
+    monkeypatch.setattr(
+        history_mod.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "CSV report (*.csv)")),
+    )
+    panel._export_csv_btn.click()
+    assert target.exists()
+    assert target.read_text(encoding="utf-8").startswith("section,key,name,value")
+
+
+def test_history_panel_delete_confirmed_removes_session(qapp, tmp_path, monkeypatch):
+    from autodiag.ui.panels import history as history_mod
+
+    store = _history_store(tmp_path)
+    panel = HistoryPanel(store)
+    panel._table.selectRow(0)
+
+    answer = history_mod.QMessageBox.StandardButton
+    monkeypatch.setattr(
+        history_mod.QMessageBox,
+        "question",
+        staticmethod(lambda *args, **kwargs: answer.No),
+    )
+    panel._delete()
+    assert len(store.list()) == 1  # declined → kept
+
+    monkeypatch.setattr(
+        history_mod.QMessageBox,
+        "question",
+        staticmethod(lambda *args, **kwargs: answer.Yes),
+    )
+    panel._delete()
+    assert store.list() == []
+    assert panel._table.rowCount() == 0
+    assert panel._count_label.text() == "No saved sessions yet"
+
+
+def test_history_panel_refreshes_when_shown(qapp, tmp_path):
+    store = SessionStore(tmp_path)
+    panel = HistoryPanel(store)
+    assert panel._table.rowCount() == 0
+
+    store.save(
+        build_report(make_record(), now=datetime(2026, 10, 3, tzinfo=UTC)),
+        when=datetime(2026, 10, 3, tzinfo=UTC),
+    )
+    panel.show()  # showEvent → refresh
+    assert panel._table.rowCount() == 1
+    panel.close()
