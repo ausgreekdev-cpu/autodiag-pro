@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -27,6 +28,7 @@ class Mode06Panel(QWidget):
     def __init__(self, worker: ObdWorker, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._worker = worker
+        self._results: list[TestResult] = []
 
         self._build_ui()
         worker.connected.connect(lambda _info: self._read_btn.setEnabled(True))
@@ -47,6 +49,9 @@ class Mode06Panel(QWidget):
         self._read_btn.setEnabled(False)
         self._read_btn.clicked.connect(lambda: self._worker.read_mode06())
         actions.addWidget(self._read_btn)
+        self._only_failures = QCheckBox("Only failures")
+        self._only_failures.toggled.connect(lambda _on: self._render())
+        actions.addWidget(self._only_failures)
         actions.addStretch(1)
         self._count_label = QLabel("")
         self._count_label.setObjectName("subtle")
@@ -76,9 +81,21 @@ class Mode06Panel(QWidget):
     # -- worker handlers ---------------------------------------------------------------
 
     def on_mode06(self, results: list[TestResult]) -> None:
+        self._results = list(results)
+        self._render()
+
+    def _render(self) -> None:
+        results = self._results
+        shown = (
+            [r for r in results if r.passed is False]
+            if self._only_failures.isChecked()
+            else results
+        )
+        passed = sum(1 for r in results if r.passed is True)
+        failed = sum(1 for r in results if r.passed is False)
+
         self._table.setRowCount(0)
-        passed = failed = 0
-        for result in results:
+        for result in shown:
             row = self._table.rowCount()
             self._table.insertRow(row)
             values = (
@@ -97,15 +114,20 @@ class Mode06Panel(QWidget):
                         Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
                     )
                 self._table.setItem(row, column, item)
-            if result.passed is True:
-                passed += 1
-            elif result.passed is False:
-                failed += 1
+            if result.passed is False:
                 for column in range(len(values)):
                     cell = self._table.item(row, column)
                     if cell is not None:
                         cell.setForeground(QBrush(QColor(theme.DANGER)))
-        self._count_label.setText(f"{len(results)} test(s)")
+
+        if not results:
+            self._count_label.setText("")
+        elif len(shown) == len(results):
+            self._count_label.setText(f"{len(results)} test(s)")
+        else:
+            self._count_label.setText(f"{len(shown)} / {len(results)} test(s)")
+
+        # the summary always describes the full set, filtered or not
         if failed:
             self._hint.setText(f"{failed} test(s) outside limits, {passed} passed.")
             self._hint.setStyleSheet(f"color: {theme.DANGER};")
@@ -118,6 +140,7 @@ class Mode06Panel(QWidget):
 
     def _reset(self) -> None:
         self._table.setRowCount(0)
+        self._results = []
         self._read_btn.setEnabled(False)
         self._count_label.setText("")
         self._hint.setStyleSheet("")

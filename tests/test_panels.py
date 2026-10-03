@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QLabel, QLineEdit, QTableWidget
 
+from autodiag.obd import mode06 as m06
 from autodiag.obd.mode06 import parse_test_results
 from autodiag.obd.readiness import parse_monitor_status
 from autodiag.services.record import ScanRecord
@@ -132,6 +133,54 @@ def test_mode06_panel_fills_table(qapp):
     assert table.item(0, 2).text() == "0.199104"
     assert table.item(0, 6).text() == "PASS"
     assert panel._count_label.text() == "1 test(s)"
+
+
+def _mode06_result(value: float, low: float, high: float) -> m06.TestResult:
+    return m06.TestResult(
+        mid=0x01,
+        tid=0x01,
+        uasid=0,
+        raw_value=1,
+        raw_min=0,
+        raw_max=2,
+        value=value,
+        min_value=low,
+        max_value=high,
+        unit="v",
+    )
+
+
+def test_mode06_panel_failures_only_filter(qapp):
+    worker = ObdWorker()
+    panel = Mode06Panel(worker)
+    results = [
+        _mode06_result(1.0, 0.0, 2.0),  # PASS
+        _mode06_result(9.0, 0.0, 2.0),  # FAIL
+        m06.TestResult(  # NOT RUN: all raw bytes zero
+            mid=0x01, tid=0x01, uasid=0,
+            raw_value=0, raw_min=0, raw_max=0,
+            value=0.0, min_value=0.0, max_value=0.0, unit="v",
+        ),
+    ]
+    worker.mode06.emit(results)
+    table = panel._table
+    assert table.rowCount() == 3
+    assert panel._count_label.text() == "3 test(s)"
+    summary = panel._hint.text()
+
+    panel._only_failures.setChecked(True)
+    assert table.rowCount() == 1
+    assert table.item(0, 6).text() == "FAIL"
+    assert panel._count_label.text() == "1 / 3 test(s)"
+    assert panel._hint.text() == summary  # summary always covers the full set
+
+    panel._only_failures.setChecked(False)
+    assert table.rowCount() == 3
+    assert panel._count_label.text() == "3 test(s)"
+
+    worker.disconnected.emit("bye")  # results dropped with the session
+    assert table.rowCount() == 0
+    assert panel._count_label.text() == ""
 
 
 def test_settings_panel_exports(qapp, tmp_path):
