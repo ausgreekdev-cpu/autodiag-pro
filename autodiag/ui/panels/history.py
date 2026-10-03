@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
@@ -31,11 +31,14 @@ _CSV_FILTER = "CSV report (*.csv)"
 class HistoryPanel(QWidget):
     """Read-only browser over the :class:`SessionStore` on disk."""
 
+    view_log = Signal(str)  # log filename (emitted by the View log… button)
+
     def __init__(self, store: SessionStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._store = store
         self._summaries: list[dict] = []
         self._selected: str | None = None
+        self._selected_log: str | None = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -48,13 +51,20 @@ class HistoryPanel(QWidget):
         layout.addWidget(heading)
 
         actions = QHBoxLayout()
+        self._view_log_btn = QPushButton("View log…")
         self._export_json_btn = QPushButton("Export JSON…")
         self._export_csv_btn = QPushButton("Export CSV…")
         self._delete_btn = QPushButton("Delete")
+        self._view_log_btn.clicked.connect(self._on_view_log)
         self._export_json_btn.clicked.connect(lambda: self._export(".json"))
         self._export_csv_btn.clicked.connect(lambda: self._export(".csv"))
         self._delete_btn.clicked.connect(self._delete)
-        for button in (self._export_json_btn, self._export_csv_btn, self._delete_btn):
+        for button in (
+            self._view_log_btn,
+            self._export_json_btn,
+            self._export_csv_btn,
+            self._delete_btn,
+        ):
             button.setEnabled(False)
             actions.addWidget(button)
         actions.addStretch(1)
@@ -128,6 +138,7 @@ class HistoryPanel(QWidget):
         self._table.blockSignals(False)
         self._table.clearSelection()
         self._selected = None
+        self._selected_log = None
         self._detail.clear()
         self._set_buttons_enabled(False)
         if self._summaries:
@@ -146,10 +157,12 @@ class HistoryPanel(QWidget):
         row = rows.pop() if len(rows) == 1 else -1
         if row < 0 or row >= len(self._summaries):
             self._selected = None
+            self._selected_log = None
             self._detail.clear()
             self._set_buttons_enabled(False)
             return
         self._selected = self._summaries[row]["name"]
+        self._selected_log = str(self._summaries[row].get("log_file") or "") or None
         report = self._store.load(self._selected)
         self._detail.setPlainText(
             describe_report(report) if report is not None else "Session file unreadable."
@@ -180,7 +193,12 @@ class HistoryPanel(QWidget):
             self._store.delete(self._selected)
             self.refresh()
 
+    def _on_view_log(self) -> None:
+        if self._selected_log:
+            self.view_log.emit(self._selected_log)
+
     def _set_buttons_enabled(self, enabled: bool) -> None:
+        self._view_log_btn.setEnabled(enabled and bool(self._selected_log))
         self._export_json_btn.setEnabled(enabled)
         self._export_csv_btn.setEnabled(enabled)
         self._delete_btn.setEnabled(enabled)

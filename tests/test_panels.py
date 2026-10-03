@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QLineEdit, QTableWidget
 
 from autodiag.obd import mode06 as m06
@@ -11,10 +12,12 @@ from autodiag.obd.mode06 import parse_test_results
 from autodiag.obd.readiness import parse_monitor_status
 from autodiag.services.export import build_report
 from autodiag.services.history import SessionStore
+from autodiag.services.log_reader import LogData, LogSeries
 from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.panels.freeze import FreezeFramePanel
 from autodiag.ui.panels.history import HistoryPanel
+from autodiag.ui.panels.log_viewer import LogViewerPanel, nearest_sample, status_text
 from autodiag.ui.panels.mode06 import Mode06Panel
 from autodiag.ui.panels.readiness import ReadinessPanel
 from autodiag.ui.panels.settings import SettingsPanel
@@ -323,3 +326,161 @@ def test_history_panel_refreshes_when_shown(qapp, tmp_path):
     panel.show()  # showEvent → refresh
     assert panel._table.rowCount() == 1
     panel.close()
+
+
+def test_history_view_log_button_emits_filename(qapp, tmp_path):
+    panel = HistoryPanel(_history_store(tmp_path))  # session has a log link
+    panel._table.selectRow(0)
+    assert panel._view_log_btn.isEnabled()
+
+    emitted: list[str] = []
+    panel.view_log.connect(emitted.append)
+    panel._view_log_btn.click()
+    assert emitted == ["log-20261003-120000.csv"]
+
+    panel._table.clearSelection()
+    assert not panel._view_log_btn.isEnabled()
+    assert not panel._export_json_btn.isEnabled()
+
+
+def test_history_view_log_disabled_when_session_has_no_log(qapp, tmp_path):
+    store = SessionStore(tmp_path / "store")
+    store.save(
+        build_report(make_record(), now=datetime(2026, 10, 3, tzinfo=UTC)),
+        when=datetime(2026, 10, 3, tzinfo=UTC),
+    )
+    panel = HistoryPanel(store)
+    panel._table.selectRow(0)
+    assert not panel._view_log_btn.isEnabled()
+    assert panel._export_json_btn.isEnabled()  # other actions still fine
+
+
+# -- log viewer ---------------------------------------------------------------------
+
+_VIEWER_ROWS = [
+    (0.00, "0C", "Engine RPM", "rpm", 812.0),
+    (0.00, "0D", "Vehicle speed", "km/h", 44.0),
+    (0.00, "05", "Coolant temp", "°C", 88.0),
+    (0.00, "04", "Engine load", "%", 32.5),
+    (0.00, "0B", "Intake pressure", "kPa", 76.0),
+    (0.25, "0C", "Engine RPM", "rpm", 845.5),
+    (0.25, "0D", "Vehicle speed", "km/h", 46.0),
+    (0.50, "0C", "Engine RPM", "rpm", 901.0),
+]
+
+
+def _log_text(rows) -> str:
+    lines = ["timestamp,elapsed_s,pid,name,unit,value"]
+    for index, (elapsed, pid, name, unit, value) in enumerate(rows):
+        lines.append(
+            f"2026-10-03T12:00:{index:02d}.000+00:00,{elapsed:.3f},"
+            f"{pid},{name},{unit},{value}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _write_viewer_log(directory, name: str = "log-20261003-120000.csv", rows=None):
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / name).write_text(
+        _log_text(_VIEWER_ROWS if rows is None else rows), encoding="utf-8"
+    )
+    return directory / name
+
+
+def test_nearest_sample_picks_closest_point():
+    xs = [0.0, 1.0, 2.0]
+    ys = [10.0, 20.0, 30.0]
+    assert nearest_sample(xs, ys, 0.6) == 20.0
+    assert nearest_sample(xs, ys, 1.9) == 30.0
+    assert nearest_sample([], [], 1.0) is None
+
+
+def test_status_text_line():
+    data = LogData(
+        rows=12345,
+        series={
+            0x0C: LogSeries(0x0C, "Engine RPM", "rpm", xs=[0.0, 2070.0], ys=[1.0, 2.0])
+        },
+    )
+    assert (
+        status_text("log-20261003-120000.csv", data)
+        == "log-20261003-120000.csv · 12,345 rows · 34.5 min · 1 parameter"
+    )
+
+
+def test_log_viewer_lists_files_and_checks_default_series(qapp, tmp_path):
+    logs = tmp_path / "logs"
+    _write_viewer_log(logs)
+    _write_viewer_log(logs, name="log-20261002-090000.csv", rows=_VIEWER_ROWS[:2])
+
+    panel = LogViewerPanel(logs)
+    assert panel._file_combo.count() == 2
+    assert panel._file_combo.currentData() == "log-20261003-120000.csv"  # newest first
+    assert panel._table.rowCount() == 5  # 5 distinct PIDs
+    checked = [
+        pid
+        for pid, row in panel._rows.items()
+        if panel._table.item(row, 0).checkState() == Qt.CheckState.Checked
+    ]
+    assert checked == [0x0C, 0x0D, 0x05, 0x04]  # first four pre-selected
+    assert panel._graph.active_pids() == [0x0C, 0x0D, 0x05, 0x04]
+
+    status = panel._status_label.text()
+    assert "log-20261003-120000.csv" in status
+    assert "8 rows" in status
+    assert "5 parameters" in status
+    assert panel._export_btn.isEnabled()
+
+
+def test_log_viewer_toggle_replots(qapp, tmp_path):
+    logs = tmp_path / "logs"
+    _write_viewer_log(logs)
+    panel = LogViewerPanel(logs)
+
+    check = panel._table.item(panel._rows[0x0C], 0)
+    check.setCheckState(Qt.CheckState.Unchecked)  # fires itemChanged
+    assert 0x0C not in panel._graph.active_pids()
+    assert panel._graph.active_pids() == [0x0D, 0x05, 0x04]
+
+    check.setCheckState(Qt.CheckState.Checked)
+    assert panel._graph.active_pids() == [0x0C, 0x0D, 0x05, 0x04]
+
+
+def test_log_viewer_empty_dir(qapp, tmp_path):
+    panel = LogViewerPanel(tmp_path / "does-not-exist")
+    assert panel._file_combo.count() == 0
+    assert panel._table.rowCount() == 0
+    assert panel._status_label.text() == "No logs recorded yet."
+    assert not panel._export_btn.isEnabled()
+    assert panel._graph.active_pids() == []
+
+
+def test_log_viewer_browse_loads_file_outside_dir(qapp, tmp_path, monkeypatch):
+    from autodiag.ui.panels import log_viewer as viewer_mod
+
+    external = tmp_path / "elsewhere.csv"
+    external.write_text(_log_text(_VIEWER_ROWS[:3]), encoding="utf-8")
+    monkeypatch.setattr(
+        viewer_mod.QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(external), "CSV log (*.csv)")),
+    )
+    panel = LogViewerPanel(tmp_path / "logs")  # empty target dir
+    panel._browse_btn.click()
+    assert "elsewhere.csv" in panel._status_label.text()
+    assert panel._table.rowCount() == 3
+
+
+def test_log_viewer_load_log_rejects_traversal_and_missing(qapp, tmp_path):
+    panel = LogViewerPanel(tmp_path)
+    assert panel.load_log("../evil.csv") is False
+    assert panel.load_log("log-20261003-120000.csv") is False  # missing → OSError
+    assert "Could not read" in panel._status_label.text()
+
+
+def test_log_viewer_load_log_from_name(qapp, tmp_path):
+    logs = tmp_path / "logs"
+    _write_viewer_log(logs)
+    panel = LogViewerPanel(logs)
+    assert panel.load_log("log-20261003-120000.csv") is True
+    assert panel._table.rowCount() == 5

@@ -29,3 +29,16 @@ def qapp():
     )
     apply_theme(app)
     return app
+
+
+@pytest.fixture(autouse=True)
+def _isolate_default_store(monkeypatch, tmp_path_factory):
+    """Tests that don't inject a store must not touch the real AppData dir.
+
+    (``test_default_directory_ends_in_sessions`` holds an import-time bound
+    to the original function, so it still checks the real path.)
+    """
+    target = tmp_path_factory.mktemp("autodiag-default-store")
+    monkeypatch.setattr(
+        "autodiag.services.history.default_directory", lambda: target
+    )

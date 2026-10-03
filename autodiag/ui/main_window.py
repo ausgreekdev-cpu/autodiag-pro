@@ -30,6 +30,7 @@ from autodiag.transports.serial_transport import SerialPortInfo, list_serial_por
 from autodiag.ui.panels.dashboard import DashboardPanel
 from autodiag.ui.panels.freeze import FreezeFramePanel
 from autodiag.ui.panels.history import HistoryPanel
+from autodiag.ui.panels.log_viewer import LogViewerPanel
 from autodiag.ui.panels.mode06 import Mode06Panel
 from autodiag.ui.panels.readiness import ReadinessPanel
 from autodiag.ui.panels.settings import SettingsPanel
@@ -131,7 +132,10 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(
             SettingsPanel(self.record, lambda msg: self.statusBar().showMessage(msg, 8000))
         )
-        self._stack.addWidget(HistoryPanel(self._store))
+        self._history = HistoryPanel(self._store)
+        self._stack.addWidget(self._history)
+        self._viewer = LogViewerPanel(Path(self._store.directory) / "logs")
+        self._stack.addWidget(self._viewer)
 
         nav_items = (
             "Dashboard",
@@ -142,6 +146,7 @@ class MainWindow(QMainWindow):
             "Mode $06",
             "Settings",
             "History",
+            "Log viewer",
         )
         nav = QWidget()
         nav.setFixedWidth(184)
@@ -197,6 +202,15 @@ class MainWindow(QMainWindow):
         # time-series CSV logger (feeds itself from the same signal)
         self._dashboard.log_toggled.connect(self._on_log_armed)
         worker.pid_value.connect(self._live_log.add)
+
+        # history → log viewer jump
+        self._history.view_log.connect(self._on_view_log)
+
+    def _on_view_log(self, name: str) -> None:
+        if self._viewer.load_log(name):
+            self.show_panel(8)
+        else:
+            self.statusBar().showMessage(f"Log {name} is no longer available.", 8000)
 
     # -- live log -----------------------------------------------------------------
 

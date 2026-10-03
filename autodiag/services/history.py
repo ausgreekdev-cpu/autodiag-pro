@@ -136,6 +136,7 @@ def _summarize(name: str, report: dict[str, Any]) -> dict[str, Any]:
         "tests": len(report.get("mode06") or []),
         "pids": len(report.get("live_data") or []),
         "log_rows": int((report.get("live_log") or {}).get("rows") or 0),
+        "log_file": str((report.get("live_log") or {}).get("file") or ""),
     }
 
 

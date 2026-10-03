@@ -202,7 +202,7 @@ def test_dashboard_filter_survives_reconnect_and_keeps_check_state(qapp):
 def test_main_window_navigation(qapp, tmp_path):
     window = MainWindow(prefs=_fresh_prefs(tmp_path))
     stack = window.findChildren(QStackedWidget)[0]
-    assert stack.count() == 8
+    assert stack.count() == 9
 
     window.show_panel(2)
     assert stack.currentIndex() == 2
@@ -212,6 +212,10 @@ def test_main_window_navigation(qapp, tmp_path):
     window.show_panel(6)
     assert stack.currentIndex() == 6
     assert _button(window, "Settings").isChecked()
+
+    window.show_panel(8)
+    assert stack.currentIndex() == 8
+    assert _button(window, "Log viewer").isChecked()
 
     window.show_panel(0)
     assert stack.currentIndex() == 0
@@ -444,3 +448,56 @@ def test_main_window_disarm_stops_logging(qapp, tmp_path):
     report = store.load(store.list()[0]["name"])
     assert report is not None
     assert report["live_log"]["rows"] == 1  # log from before disarming still linked
+
+
+def test_main_window_view_log_from_history(qapp, tmp_path):
+    from datetime import UTC, datetime
+
+    from autodiag.services.export import build_report
+    from tests.test_export import make_record
+
+    store = _fresh_store(tmp_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    log_name = "log-20261003-120000.csv"
+    (logs / log_name).write_text(
+        "timestamp,elapsed_s,pid,name,unit,value\n"
+        "2026-10-03T12:00:00.000+00:00,0.000,0C,Engine RPM,rpm,812.0\n",
+        encoding="utf-8",
+    )
+    record = make_record()
+    record.log_file = log_name
+    record.log_rows = 1
+    store.save(build_report(record, now=datetime(2026, 10, 3, tzinfo=UTC)))
+
+    window = MainWindow(prefs=_fresh_prefs(tmp_path), store=store)
+    window.show_panel(7)
+    window._history._table.selectRow(0)
+    window._history._view_log_btn.click()
+
+    assert window._stack.currentIndex() == 8  # switched to the log viewer
+    assert log_name in window._viewer._status_label.text()
+    assert window._viewer._table.rowCount() == 1
+    window.close()
+
+
+def test_main_window_view_log_missing_file_stays_put(qapp, tmp_path):
+    from datetime import UTC, datetime
+
+    from autodiag.services.export import build_report
+    from tests.test_export import make_record
+
+    store = _fresh_store(tmp_path)
+    record = make_record()
+    record.log_file = "log-20200101-000000.csv"  # pruned away
+    record.log_rows = 99
+    store.save(build_report(record, now=datetime(2026, 10, 3, tzinfo=UTC)))
+
+    window = MainWindow(prefs=_fresh_prefs(tmp_path), store=store)
+    window.show_panel(7)
+    window._history._table.selectRow(0)
+    window._history._view_log_btn.click()
+
+    assert window._stack.currentIndex() == 7  # did not switch
+    assert "no longer available" in window.statusBar().currentMessage()
+    window.close()

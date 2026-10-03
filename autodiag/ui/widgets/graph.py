@@ -35,6 +35,11 @@ class LiveGraph(QWidget):
         self._ys: dict[int, deque[float]] = {}
         self._curves: dict[int, pg.PlotDataItem] = {}
 
+    @property
+    def plot_widget(self) -> pg.PlotWidget:
+        """The underlying pyqtgraph widget (cursor overlays, custom axes)."""
+        return self._plot
+
     # -- API ------------------------------------------------------------------
 
     def set_active(self, pids: Iterable[int]) -> None:
