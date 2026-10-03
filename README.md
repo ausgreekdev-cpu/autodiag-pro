@@ -41,6 +41,9 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **Time-series CSV logs** — every polled value streams into a timestamped CSV
   (*Log*, on by default; newest 50 kept) and the matching history session links
   back to it
+- **In-app log review** — the Log viewer charts any saved CSV: parameter picker,
+  hover cursor readout, PNG export; jump straight from a history session's
+  *View log…* button
 
 Fully offline: no accounts, no servers — everything runs on your machine.
 
@@ -70,6 +73,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 8. Persistence + UX polish (v0.3.0) | done |
 | 9. Decoder hardening + session history (v0.4.0) | done |
 | 10. Live-data CSV logger (v0.5.0) | done |
+| 11. Log viewer (v0.6.0) | done |
 
 ## Install & run
 
@@ -107,7 +111,11 @@ autodiag            # or: python -m autodiag
    readings) as JSON or CSV.
 7. **History** — past sessions appear here automatically when you close the app
    (the newest 50 are kept). Select one to preview it, re-export it as JSON/CSV,
-   or delete it; the *Log* column shows which sessions have a CSV time series.
+   or delete it; the *Log* column shows which sessions have a CSV time series,
+   and *View log…* opens one straight in the Log viewer.
+8. **Log viewer** — pick any recorded log (or *Browse…* for a CSV elsewhere),
+   tick parameters to plot them, hover the graph for a cursor readout, and
+   *Export image…* to save the chart as a PNG.
 
 ## Development
 
