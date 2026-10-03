@@ -6,6 +6,7 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QLabel, QPushButton, QStackedWidget
 
 from autodiag.obd.elm327 import SessionInfo
+from autodiag.services.history import SessionStore
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.main_window import MainWindow
 from autodiag.ui.panels.dashboard import DashboardPanel
@@ -30,6 +31,10 @@ def _button(window: MainWindow, text: str) -> QPushButton:
 def _fresh_prefs(tmp_path, name: str = "prefs.ini") -> Prefs:
     settings = QSettings(str(tmp_path / name), QSettings.Format.IniFormat)
     return Prefs(settings)
+
+
+def _fresh_store(tmp_path) -> SessionStore:
+    return SessionStore(tmp_path)
 
 
 def test_gauge_renders_value_and_empty_state(qapp):
@@ -353,3 +358,67 @@ def test_main_window_close_skips_session_without_data(qapp, tmp_path):
     window.record.record_event("connected", (_INFO,))  # adapter info alone
     window.close()
     assert store.list() == []
+
+
+def test_dashboard_log_toggle_drives_label_and_prefs(qapp, tmp_path):
+    prefs = _fresh_prefs(tmp_path)
+    window = MainWindow(prefs=prefs, store=_fresh_store(tmp_path))
+
+    checkbox = window._dashboard._log_chk
+    label = window._dashboard._log_label
+    assert checkbox.isChecked()  # default on
+    assert label.text() == ""
+
+    checkbox.setChecked(False)
+    assert prefs.auto_log() is False
+    assert not window._live_log.armed
+    assert label.text() == ""  # cleared on disarm
+
+    checkbox.setChecked(True)
+    assert prefs.auto_log() is True
+    assert window._live_log.armed
+    window._dashboard.set_log_status("log-20261003-120000.csv", 1234)
+    assert label.text() == "log-20261003-120000.csv · 1,234 rows"
+    window.close()
+
+
+def test_main_window_writes_live_log_and_links_session(qapp, tmp_path):
+    store = _fresh_store(tmp_path)
+    window = MainWindow(prefs=_fresh_prefs(tmp_path), store=store)
+
+    window.worker.pid_value.emit(0x0C, 812.0, 1.0)
+    label = window._dashboard._log_label
+    assert "log-" in label.text() and "1 row" in label.text()
+    assert window._live_log.row_count == 1
+
+    window.close()
+
+    logs = sorted((tmp_path / "logs").glob("log-*.csv"))
+    assert len(logs) == 1
+    content = logs[0].read_text(encoding="utf-8")
+    assert content.startswith("timestamp,elapsed_s,pid,name,unit,value")
+    assert "0C,Engine RPM,rpm,812.0" in content
+
+    summaries = store.list()
+    assert len(summaries) == 1
+    assert summaries[0]["log_rows"] == 1
+    report = store.load(summaries[0]["name"])
+    assert report is not None
+    assert report["live_log"] == {"file": logs[0].name, "rows": 1}
+
+
+def test_main_window_disarm_stops_logging(qapp, tmp_path):
+    store = _fresh_store(tmp_path)
+    window = MainWindow(prefs=_fresh_prefs(tmp_path), store=store)
+    window.worker.pid_value.emit(0x0C, 812.0, 1.0)
+
+    window._dashboard._log_chk.setChecked(False)
+    assert not window._live_log.armed
+    assert window._dashboard._log_label.text() == ""
+    window.worker.pid_value.emit(0x0C, 900.0, 2.0)
+    assert window._live_log.row_count == 1  # ignored while disarmed
+
+    window.close()
+    report = store.load(store.list()[0]["name"])
+    assert report is not None
+    assert report["live_log"]["rows"] == 1  # log from before disarming still linked

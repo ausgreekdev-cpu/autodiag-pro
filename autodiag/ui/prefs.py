@@ -41,6 +41,16 @@ class Prefs:
     def set_auto_connect(self, enabled: bool) -> None:
         self._s.setValue("auto_connect", bool(enabled))
 
+    def auto_log(self) -> bool:
+        """Live-data CSV logging (on by default)."""
+        raw = self._s.value("auto_log", True)
+        if isinstance(raw, str):
+            return raw.lower() in ("true", "1", "yes")
+        return bool(raw)
+
+    def set_auto_log(self, enabled: bool) -> None:
+        self._s.setValue("auto_log", bool(enabled))
+
     # -- polling --------------------------------------------------------------
 
     def poll_interval_ms(self) -> int:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -21,6 +23,7 @@ from PySide6.QtWidgets import (
 from autodiag.obd.elm327 import SessionInfo
 from autodiag.services.export import build_report
 from autodiag.services.history import SessionStore, record_has_data
+from autodiag.services.live_log import LiveLog
 from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
 from autodiag.transports.serial_transport import SerialPortInfo, list_serial_ports
@@ -50,6 +53,13 @@ class MainWindow(QMainWindow):
         self._prefs = prefs if prefs is not None else Prefs()
         self._store = store if store is not None else SessionStore()
         self._connected = False
+        # logs live beside the sessions; armed from prefs (default on)
+        self._live_log = LiveLog(
+            Path(self._store.directory) / "logs",
+            on_change=self._on_log_change,
+            on_error=lambda msg: self.statusBar().showMessage(msg, 8000),
+        )
+        self._live_log.set_armed(self._prefs.auto_log())
 
         self.setWindowTitle("AutoDiag Pro")
         self.resize(1240, 820)
@@ -184,6 +194,20 @@ class MainWindow(QMainWindow):
         )
         worker.mode06.connect(lambda results: record("mode06", (results,)))
 
+        # time-series CSV logger (feeds itself from the same signal)
+        self._dashboard.log_toggled.connect(self._on_log_armed)
+        worker.pid_value.connect(self._live_log.add)
+
+    # -- live log -----------------------------------------------------------------
+
+    def _on_log_armed(self, armed: bool) -> None:
+        self._live_log.set_armed(armed)
+        if not armed:
+            self._dashboard.set_log_status(None, 0)
+
+    def _on_log_change(self, path: Path | None, rows: int) -> None:
+        self._dashboard.set_log_status(path.name if path else None, rows)
+
     # -- public API --------------------------------------------------------------
 
     def show_panel(self, index: int) -> None:
@@ -291,6 +315,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 — Qt naming
         self.statusBar().showMessage("Shutting down…", 0)
+        self._live_log.close()
+        if self._live_log.path is not None:
+            self.record.log_file = self._live_log.path.name
+            self.record.log_rows = self._live_log.row_count
         if record_has_data(self.record):
             try:
                 self._store.save(build_report(self.record))

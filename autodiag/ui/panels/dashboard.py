@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QHBoxLayout,
@@ -36,6 +37,8 @@ _COL_GRAPH, _COL_PID, _COL_NAME, _COL_VALUE, _COL_UNIT = range(5)
 
 class DashboardPanel(QWidget):
     """Live-data hub: subscribes to the worker's PID signals itself."""
+
+    log_toggled = Signal(bool)  # checkbox state (MainWindow owns the logger)
 
     def __init__(
         self,
@@ -109,6 +112,14 @@ class DashboardPanel(QWidget):
         controls.addWidget(interval_label)
         controls.addWidget(self._interval_spin)
         controls.addStretch(1)
+        self._log_chk = QCheckBox("Log")
+        self._log_chk.setToolTip("Record every polled value to a CSV session log")
+        self._log_chk.setChecked(self._prefs.auto_log())
+        self._log_chk.toggled.connect(self._on_log_toggled)
+        controls.addWidget(self._log_chk)
+        self._log_label = QLabel("")
+        self._log_label.setObjectName("subtle")
+        controls.addWidget(self._log_label)
         self._pid_count_label = QLabel("")
         self._pid_count_label.setObjectName("subtle")
         controls.addWidget(self._pid_count_label)
@@ -279,6 +290,14 @@ class DashboardPanel(QWidget):
         self._prefs.set_poll_interval_ms(value_ms)
         # safe while disconnected too: the engine just parks the new interval
         self._worker.set_poll(None, value_ms / 1000.0)
+
+    def _on_log_toggled(self, checked: bool) -> None:
+        self._prefs.set_auto_log(checked)
+        self.log_toggled.emit(checked)
+
+    def set_log_status(self, name: str | None, rows: int) -> None:
+        """Show the active log file (or clear the label when off/unknown)."""
+        self._log_label.setText("" if name is None else f"{name} · {rows:,} rows")
 
     def _apply_filter(self) -> None:
         """Hide non-matching rows in place (check state and gauges untouched)."""

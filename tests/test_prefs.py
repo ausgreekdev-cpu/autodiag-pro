@@ -16,6 +16,7 @@ def test_defaults(tmp_path):
     prefs = _prefs(tmp_path)
     assert prefs.last_port() is None
     assert prefs.auto_connect() is False
+    assert prefs.auto_log() is True  # live logging is on out of the box
     assert prefs.poll_interval_ms() == 250
     assert prefs.panel_index() == 0
     assert prefs.window_geometry() is None
@@ -26,6 +27,7 @@ def test_round_trip_through_second_instance(tmp_path):
     prefs = _prefs(tmp_path)
     prefs.set_last_port("/dev/ttyUSB0")
     prefs.set_auto_connect(True)
+    prefs.set_auto_log(False)
     prefs.set_poll_interval_ms(750)
     prefs.set_panel_index(3)
     geometry = QByteArray(b"\x01\x02binary blob")
@@ -37,6 +39,7 @@ def test_round_trip_through_second_instance(tmp_path):
     fresh = _prefs(tmp_path)
     assert fresh.last_port() == "/dev/ttyUSB0"
     assert fresh.auto_connect() is True
+    assert fresh.auto_log() is False
     assert fresh.poll_interval_ms() == 750
     assert fresh.panel_index() == 3
     assert bytes(fresh.window_geometry() or QByteArray()) == bytes(geometry)
