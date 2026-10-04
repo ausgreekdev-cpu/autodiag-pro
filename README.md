@@ -44,6 +44,9 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **In-app log review** — the Log viewer charts any saved CSV: parameter picker,
   hover cursor readout, PNG export; jump straight from a history session's
   *View log…* button
+- **Session compare** — diff any two saved sessions: codes added/removed,
+  readiness and MIL flips, Mode $06 pass/fail changes, live-value deltas,
+  plus a warning when the two VINs differ
 
 Fully offline: no accounts, no servers — everything runs on your machine.
 
@@ -74,6 +77,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 9. Decoder hardening + session history (v0.4.0) | done |
 | 10. Live-data CSV logger (v0.5.0) | done |
 | 11. Log viewer (v0.6.0) | done |
+| 12. Session compare (v0.7.0) | done |
 
 ## Install & run
 
@@ -112,7 +116,10 @@ autodiag            # or: python -m autodiag
 7. **History** — past sessions appear here automatically when you close the app
    (the newest 50 are kept). Select one to preview it, re-export it as JSON/CSV,
    or delete it; the *Log* column shows which sessions have a CSV time series,
-   and *View log…* opens one straight in the Log viewer.
+   and *View log…* opens one straight in the Log viewer. *Compare…* opens two
+   sessions side by side — codes gained/lost, readiness flips, test changes
+   and value deltas — defaulting to your selection against the newest other
+   session.
 8. **Log viewer** — pick any recorded log (or *Browse…* for a CSV elsewhere),
    tick parameters to plot them, hover the graph for a cursor readout, and
    *Export image…* to save the chart as a PNG.
