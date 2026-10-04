@@ -16,6 +16,7 @@ from autodiag.services.log_reader import LogData, LogSeries
 from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.compare_dialog import CompareDialog
+from autodiag.ui.panels.explorer import PidExplorerPanel
 from autodiag.ui.panels.freeze import FreezeFramePanel
 from autodiag.ui.panels.history import HistoryPanel
 from autodiag.ui.panels.log_viewer import LogViewerPanel, nearest_sample, status_text
@@ -600,3 +601,73 @@ def test_history_compare_button_opens_dialog_with_selection(qapp, tmp_path, monk
     panel._table.selectRow(1)  # the older session
     panel._compare_btn.click()
     assert captured == {"baseline": names[1], "exec": True}
+
+
+def test_pid_explorer_lists_supported_then_unsupported(qapp):
+    worker = ObdWorker()
+    panel = PidExplorerPanel(worker)
+    worker.pids_supported.emit({0x0C, 0x0D})
+
+    labels = [panel._pid_combo.itemText(i) for i in range(panel._pid_combo.count())]
+    assert labels[0].startswith("0C") and "Engine RPM" in labels[0]
+    assert labels[1].startswith("0D") and "Vehicle speed" in labels[1]
+    assert "2 parameters supported" in panel._hint.text()
+
+    # everything else from the registry follows, marked unsupported
+    unsupported = [label for label in labels if label.endswith("(unsupported)")]
+    assert unsupported, "unsupported registry PIDs must still be pickable"
+    assert not any("(unsupported)" in label for label in labels[:2])
+
+
+def test_pid_explorer_requests_supported_pid(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = PidExplorerPanel(worker)
+    worker.connected.emit(None)
+    worker.pids_supported.emit({0x0C, 0x0D})
+    requested: list[int] = []
+    monkeypatch.setattr(worker, "request_pid", requested.append)
+
+    panel._request_btn.click()  # first combo entry = 0x0C
+    assert requested == [0x0C]
+
+
+def test_pid_explorer_force_gates_unsupported_pids(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = PidExplorerPanel(worker)
+    worker.connected.emit(None)
+    worker.pids_supported.emit({0x0C})
+    requested: list[int] = []
+    monkeypatch.setattr(worker, "request_pid", requested.append)
+
+    panel._pid_combo.setCurrentIndex(panel._pid_combo.count() - 1)  # unsupported
+    assert "(unsupported)" in panel._pid_combo.currentText()
+    panel._request_btn.click()
+    assert requested == []  # blocked …
+    assert "Force" in panel._hint.text()
+
+    panel._force_chk.setChecked(True)
+    panel._request_btn.click()
+    assert len(requested) == 1  # … until Force is ticked
+
+
+def test_pid_explorer_shows_response_row_and_graph_signal(qapp):
+    worker = ObdWorker()
+    panel = PidExplorerPanel(worker)
+    worker.pids_supported.emit({0x0C})
+    worker.connected.emit(None)
+
+    worker.pid_response.emit(0x0C, "41 0C 1A F8")
+    assert panel._table.rowCount() == 1
+    assert panel._table.item(0, 1).text() == "0C"
+    assert panel._table.item(0, 2).text() == "41 0C 1A F8"
+    value_text = panel._table.item(0, 3).text()
+    assert "Engine RPM" in value_text and "1726" in value_text
+
+    pids: list[int] = []
+    panel.graph_pid.connect(pids.append)
+    panel._graph_btn.click()
+    assert pids == [0x0C]
+
+    worker.disconnected.emit("bye")
+    assert not panel._request_btn.isEnabled()
+    assert "Connect" in panel._hint.text()

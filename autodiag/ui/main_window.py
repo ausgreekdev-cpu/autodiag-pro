@@ -28,6 +28,7 @@ from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
 from autodiag.transports.serial_transport import SerialPortInfo, list_serial_ports
 from autodiag.ui.panels.dashboard import DashboardPanel
+from autodiag.ui.panels.explorer import PidExplorerPanel
 from autodiag.ui.panels.freeze import FreezeFramePanel
 from autodiag.ui.panels.history import HistoryPanel
 from autodiag.ui.panels.log_viewer import LogViewerPanel
@@ -136,6 +137,11 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._history)
         self._viewer = LogViewerPanel(Path(self._store.directory) / "logs")
         self._stack.addWidget(self._viewer)
+        self._explorer = PidExplorerPanel(self.worker)
+        self._stack.addWidget(self._explorer)
+        self._explorer.graph_pid.connect(
+            lambda pid: self._dashboard.set_graphed(pid, True)
+        )
 
         nav_items = (
             "Dashboard",
@@ -147,6 +153,7 @@ class MainWindow(QMainWindow):
             "Settings",
             "History",
             "Log viewer",
+            "PID explorer",
         )
         nav = QWidget()
         nav.setFixedWidth(184)

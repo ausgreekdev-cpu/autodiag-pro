@@ -295,6 +295,18 @@ class DashboardPanel(QWidget):
         item = self._table.item(row, _COL_GRAPH)
         return item is not None and item.checkState() == Qt.CheckState.Checked
 
+    def set_graphed(self, pid: int, checked: bool) -> None:
+        """Toggle a parameter's graph checkbox from outside (PID explorer)."""
+        row = self._rows.get(pid)
+        if row is None:
+            return
+        item = self._table.item(row, _COL_GRAPH)
+        if item is None:
+            return
+        state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+        if item.checkState() != state:
+            item.setCheckState(state)  # fires itemChanged → graph rebuild
+
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
         if item.column() != _COL_GRAPH:
             return

@@ -178,6 +178,28 @@ def test_live_graph_set_series_applies_full_ranges(qapp):
     assert ymin <= 10.0 and ymax >= 30.0
 
 
+def test_dashboard_set_graphed_toggles_checkbox(qapp):
+    worker = ObdWorker()
+    panel = DashboardPanel(worker)
+    worker.pids_supported.emit({0x0C, 0x0D})
+
+    assert panel.is_graphed(0x0C)  # RPM pre-selected
+    panel.set_graphed(0x0D, True)
+    assert panel.is_graphed(0x0D)
+    assert 0x0D in panel._graph.active_pids()
+    panel.set_graphed(0x0D, False)
+    assert not panel.is_graphed(0x0D)
+    panel.set_graphed(0x99, True)  # unknown pid → no-op
+
+
+def test_main_window_explorer_graph_pin(qapp, tmp_path):
+    window = MainWindow(prefs=_fresh_prefs(tmp_path))
+    window.worker.pids_supported.emit({0x0C, 0x0D})
+    window._explorer.graph_pid.emit(0x0D)
+    assert window._dashboard.is_graphed(0x0D)
+    window.close()
+
+
 def test_dashboard_graph_window_combo_drives_graph(qapp, tmp_path):
     prefs = Prefs(QSettings(str(tmp_path / "p.ini"), QSettings.Format.IniFormat))
     worker = ObdWorker()
@@ -320,7 +342,7 @@ def test_dashboard_filter_survives_reconnect_and_keeps_check_state(qapp):
 def test_main_window_navigation(qapp, tmp_path):
     window = MainWindow(prefs=_fresh_prefs(tmp_path))
     stack = window.findChildren(QStackedWidget)[0]
-    assert stack.count() == 9
+    assert stack.count() == 10
 
     window.show_panel(2)
     assert stack.currentIndex() == 2
@@ -334,6 +356,10 @@ def test_main_window_navigation(qapp, tmp_path):
     window.show_panel(8)
     assert stack.currentIndex() == 8
     assert _button(window, "Log viewer").isChecked()
+
+    window.show_panel(9)
+    assert stack.currentIndex() == 9
+    assert _button(window, "PID explorer").isChecked()
 
     window.show_panel(0)
     assert stack.currentIndex() == 0
