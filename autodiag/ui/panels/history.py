@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from autodiag.services.history import SessionStore, describe_report
+from autodiag.ui.compare_dialog import CompareDialog
 
 _COLUMNS = ("Date", "VIN", "DTCs", "Mode $06", "PIDs", "Adapter", "Log")
 _JSON_FILTER = "JSON report (*.json)"
@@ -51,15 +52,18 @@ class HistoryPanel(QWidget):
         layout.addWidget(heading)
 
         actions = QHBoxLayout()
+        self._compare_btn = QPushButton("Compare…")
         self._view_log_btn = QPushButton("View log…")
         self._export_json_btn = QPushButton("Export JSON…")
         self._export_csv_btn = QPushButton("Export CSV…")
         self._delete_btn = QPushButton("Delete")
+        self._compare_btn.clicked.connect(self._open_compare)
         self._view_log_btn.clicked.connect(self._on_view_log)
         self._export_json_btn.clicked.connect(lambda: self._export(".json"))
         self._export_csv_btn.clicked.connect(lambda: self._export(".csv"))
         self._delete_btn.clicked.connect(self._delete)
         for button in (
+            self._compare_btn,
             self._view_log_btn,
             self._export_json_btn,
             self._export_csv_btn,
@@ -145,6 +149,8 @@ class HistoryPanel(QWidget):
             self._count_label.setText(f"{len(self._summaries)} session(s)")
         else:
             self._count_label.setText("No saved sessions yet")
+        # compare is selection-independent — it just needs a pair to pick from
+        self._compare_btn.setEnabled(len(self._summaries) >= 2)
 
     def showEvent(self, event) -> None:  # noqa: N802 — Qt naming
         super().showEvent(event)
@@ -196,6 +202,10 @@ class HistoryPanel(QWidget):
     def _on_view_log(self) -> None:
         if self._selected_log:
             self.view_log.emit(self._selected_log)
+
+    def _open_compare(self) -> None:
+        dialog = CompareDialog(self._store, baseline=self._selected, parent=self)
+        dialog.exec()
 
     def _set_buttons_enabled(self, enabled: bool) -> None:
         self._view_log_btn.setEnabled(enabled and bool(self._selected_log))

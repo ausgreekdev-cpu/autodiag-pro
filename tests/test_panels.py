@@ -15,6 +15,7 @@ from autodiag.services.history import SessionStore
 from autodiag.services.log_reader import LogData, LogSeries
 from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
+from autodiag.ui.compare_dialog import CompareDialog
 from autodiag.ui.panels.freeze import FreezeFramePanel
 from autodiag.ui.panels.history import HistoryPanel
 from autodiag.ui.panels.log_viewer import LogViewerPanel, nearest_sample, status_text
@@ -484,3 +485,118 @@ def test_log_viewer_load_log_from_name(qapp, tmp_path):
     panel = LogViewerPanel(logs)
     assert panel.load_log("log-20261003-120000.csv") is True
     assert panel._table.rowCount() == 5
+
+
+# -- session compare -----------------------------------------------------------------
+
+def _compare_store(tmp_path) -> SessionStore:
+    """Two sessions: oldest has P0301/RPM 1726, newest P0420/RPM 1801."""
+    store = SessionStore(tmp_path)
+    first = make_record()
+    store.save(
+        build_report(first, now=datetime(2026, 10, 3, tzinfo=UTC)),
+        when=datetime(2026, 10, 3, tzinfo=UTC),
+    )
+    second = make_record()
+    second.dtcs = {"stored": ["P0420"]}
+    second.pids[0x0C] = (1801.0, 2.0)
+    store.save(
+        build_report(second, now=datetime(2026, 10, 4, tzinfo=UTC)),
+        when=datetime(2026, 10, 4, tzinfo=UTC),
+    )
+    return store
+
+
+def test_compare_dialog_diffs_two_sessions(qapp, tmp_path):
+    store = _compare_store(tmp_path)
+    names = [summary["name"] for summary in store.list()]  # newest first
+    dialog = CompareDialog(store, baseline=names[1])
+
+    assert dialog._combo_a.currentData() == names[1]
+    assert dialog._combo_b.currentData() == names[0]
+    text = dialog._body.toPlainText()
+    assert f"Comparing {names[1]} → {names[0]}" in text
+    assert "New trouble codes:" in text and "P0420" in text
+    assert "Resolved trouble codes:" in text and "P0301" in text
+    assert "Engine RPM: 1726 → 1801 rpm" in text
+
+
+def test_compare_dialog_defaults_to_newest_pair(qapp, tmp_path):
+    store = _compare_store(tmp_path)
+    names = [summary["name"] for summary in store.list()]
+    dialog = CompareDialog(store)  # no baseline given
+    assert dialog._combo_a.currentData() == names[0]
+    assert dialog._combo_b.currentData() == names[1]
+
+
+def test_compare_dialog_same_session_and_live_update(qapp, tmp_path):
+    store = _compare_store(tmp_path)
+    names = [summary["name"] for summary in store.list()]
+    dialog = CompareDialog(store, baseline=names[1])
+
+    dialog._combo_b.setCurrentIndex(1)  # same session as the baseline
+    assert dialog._body.toPlainText() == "Pick two different sessions."
+
+    dialog._combo_b.setCurrentIndex(0)  # switch back → live recompute
+    assert "New trouble codes:" in dialog._body.toPlainText()
+
+
+def test_compare_dialog_empty_store(qapp, tmp_path):
+    dialog = CompareDialog(SessionStore(tmp_path / "does-not-exist"))
+    assert dialog._body.toPlainText() == "No sessions to compare."
+
+
+def test_compare_dialog_warns_on_vehicle_mismatch(qapp, tmp_path):
+    store = SessionStore(tmp_path)
+    store.save(
+        build_report(make_record(), now=datetime(2026, 10, 3, tzinfo=UTC)),
+        when=datetime(2026, 10, 3, tzinfo=UTC),
+    )
+    other = make_record()
+    other.vin = "5YJSA1E14HF000000"
+    store.save(
+        build_report(other, now=datetime(2026, 10, 4, tzinfo=UTC)),
+        when=datetime(2026, 10, 4, tzinfo=UTC),
+    )
+    names = [summary["name"] for summary in store.list()]
+    dialog = CompareDialog(store, baseline=names[1])
+    assert "WARNING: different vehicles" in dialog._body.toPlainText()
+
+
+def test_history_compare_button_gates_on_pair(qapp, tmp_path):
+    store = SessionStore(tmp_path)
+    store.save(
+        build_report(make_record(), now=datetime(2026, 10, 3, tzinfo=UTC)),
+        when=datetime(2026, 10, 3, tzinfo=UTC),
+    )
+    panel = HistoryPanel(store)
+    assert not panel._compare_btn.isEnabled()
+
+    store.save(
+        build_report(make_record(), now=datetime(2026, 10, 4, tzinfo=UTC)),
+        when=datetime(2026, 10, 4, tzinfo=UTC),
+    )
+    panel.refresh()
+    assert panel._compare_btn.isEnabled()
+
+
+def test_history_compare_button_opens_dialog_with_selection(qapp, tmp_path, monkeypatch):
+    from autodiag.ui.panels import history as history_mod
+
+    store = _compare_store(tmp_path)
+    names = [summary["name"] for summary in store.list()]
+    captured: dict = {}
+
+    class _StubDialog:
+        def __init__(self, _store, *, baseline=None, parent=None):
+            captured["baseline"] = baseline
+
+        @staticmethod
+        def exec():
+            captured["exec"] = True
+
+    monkeypatch.setattr(history_mod, "CompareDialog", _StubDialog)
+    panel = HistoryPanel(store)
+    panel._table.selectRow(1)  # the older session
+    panel._compare_btn.click()
+    assert captured == {"baseline": names[1], "exec": True}
