@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QLabel, QPushButton, QStackedWidget
 
@@ -101,6 +102,80 @@ def test_live_graph_bulk_set_series(qapp, tmp_path):
 
     graph.set_series({0x0D: ([0.0], [60.0], "Vehicle speed [km/h]")})
     assert graph.active_pids() == [0x0D]  # full replacement
+
+
+def test_live_graph_time_window_limits_x_range(qapp):
+    graph = LiveGraph()
+    graph.set_active([0x0C])
+    for i in range(41):  # t = 1000.0 … 1040.0 → x 0 … 40
+        graph.add_point(0x0C, 100.0 + i, 1000.0 + i)
+
+    graph.set_window(30.0)
+    (xmin, xmax), _ = graph.plot_widget.viewRange()
+    assert xmax == pytest.approx(40.0)
+    assert xmax - xmin == pytest.approx(30.0, abs=0.01)
+
+    graph.set_window(None)  # All → whole buffer
+    (xmin, xmax), _ = graph.plot_widget.viewRange()
+    assert xmin == pytest.approx(0.0)
+    assert xmax == pytest.approx(40.0)
+
+
+def test_live_graph_y_range_uses_visible_window_only(qapp):
+    graph = LiveGraph()
+    graph.set_active([0x0C])
+    for i in range(51):  # warm-up cluster, y = 100 for t 0 … 50
+        graph.add_point(0x0C, 100.0, float(i))
+    for i in range(51, 56):  # settled values, y = 5
+        graph.add_point(0x0C, 5.0, float(i))
+
+    graph.set_window(4.0)  # visible: t 51 … 55 only
+    _, (ymin, ymax) = graph.plot_widget.viewRange()
+    assert ymax < 50.0  # stale warm-up value must not squash the live line
+    assert ymin <= 5.0 <= ymax
+
+
+def test_live_graph_pause_freezes_then_resume_catches_up(qapp):
+    graph = LiveGraph()
+    graph.set_active([0x0C])
+    graph.add_point(0x0C, 1.0, 0.0)
+
+    graph.set_paused(True)
+    graph.add_point(0x0C, 2.0, 1.0)
+    graph.add_point(0x0C, 3.0, 2.0)
+    xs, _ys = graph._curves[0x0C].getData()
+    assert len(xs) == 1  # rendering frozen …
+    assert len(graph._xs[0x0C]) == 3  # … but data keeps recording
+
+    graph.set_paused(False)
+    xs, _ys = graph._curves[0x0C].getData()
+    assert len(xs) == 3  # resume renders the accumulated points at once
+    assert not graph.paused
+
+
+def test_live_graph_clear_empties_curves_and_rebases_time(qapp):
+    graph = LiveGraph()
+    graph.set_active([0x0C])
+    graph.add_point(0x0C, 1726.0, 100.0)
+    graph.add_point(0x0C, 1800.0, 100.25)
+
+    graph.clear()
+    xs, ys = graph._curves[0x0C].getData()
+    # pyqtgraph reports cleared data as (None, None)
+    assert not xs and not ys  # no stale curve left on screen
+
+    graph.add_point(0x0C, 900.0, 500.0)  # new origin → x starts over
+    xs, _ys = graph._curves[0x0C].getData()
+    assert list(xs) == [0.0]
+
+
+def test_live_graph_set_series_applies_full_ranges(qapp):
+    graph = LiveGraph()
+    graph.set_series({0x0C: ([0.0, 1.0, 2.0], [10.0, 20.0, 30.0], "RPM [rpm]")})
+    (xmin, xmax), (ymin, ymax) = graph.plot_widget.viewRange()
+    assert xmin == pytest.approx(0.0)
+    assert xmax == pytest.approx(2.0)
+    assert ymin <= 10.0 and ymax >= 30.0
 
 
 def test_dashboard_save_image_dialog_writes_png(qapp, tmp_path, monkeypatch):
