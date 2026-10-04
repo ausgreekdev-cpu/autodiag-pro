@@ -38,13 +38,17 @@ def test_worker_connect_discover_and_poll(app):
     worker.error.connect(errors.append)
 
     worker.start()
+    # queue the poll config BEFORE connecting: after _establish the engine
+    # polls every supported PID on its first idle step, and the fake0100
+    # bitmap claims PIDs the script does not answer (a slow CI runner can
+    # lose that 50 ms race and record a spurious '?' error)
+    worker.set_poll({0x0C}, 0.0)
     worker.connect_to("X")
 
     assert _wait_until(app, lambda: "info" in seen), "no connected signal"
     assert _wait_until(app, lambda: "supported" in seen), "no pids_supported signal"
     assert 0x0C in seen["supported"]
 
-    worker.set_poll({0x0C}, 0.0)
     assert _wait_until(app, lambda: len(seen["values"]) >= 2), "no pid_value signals"
     assert all(pid == 0x0C for pid, _v in seen["values"])
     assert seen["values"][0][1] == pytest.approx(1726.0)
