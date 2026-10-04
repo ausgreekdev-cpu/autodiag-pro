@@ -101,6 +101,22 @@ def test_connect_vehicle_error_stops_baud_churn():
     assert factory.attempts == [("/dev/fake", 38400)]
 
 
+def test_connect_without_vehicle_probe_tolerates_dead_bus():
+    # Adapter answers but the vehicle side does not — adapter-only checks pass.
+    no_vehicle = elm_script(**{"0100": b"UNABLE TO CONNECT\r\r>"})
+    factory = RecordingFactory({38400: FakeSerial(responses=no_vehicle)})
+    connection = connect_elm327(
+        "/dev/fake",
+        bauds=(38400,),
+        serial_factory=factory,
+        session_options=FAST,
+        probe_vehicle=False,
+    )
+    assert connection.info.voltage == pytest.approx(12.6)
+    assert connection.info.protocol is None
+    connection.session.close()
+
+
 def test_connect_port_failure_raises_immediately():
     # Port-level problems are baud-independent — stop after the first try.
 

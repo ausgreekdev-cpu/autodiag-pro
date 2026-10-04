@@ -75,8 +75,12 @@ class Elm327Session:
 
     # -- lifecycle ----------------------------------------------------------
 
-    def initialize(self) -> SessionInfo:
-        """Open the link, run the AT init sequence, probe the vehicle.
+    def initialize(self, *, probe_vehicle: bool = True) -> SessionInfo:
+        """Open the link, run the AT init sequence, optionally probe the vehicle.
+
+        With ``probe_vehicle=False`` the ``0100`` protocol probe and ``ATDP*``
+        queries are skipped: the adapter is verified (banner, voltage) without
+        needing a vehicle on the bus, and ``protocol`` stays ``None``.
 
         Raises :class:`ElmError` / :class:`ElmTimeout`. After a plausible
         ``ATZ`` banner, ``adapter_seen`` is ``True`` — callers should stop
@@ -105,17 +109,20 @@ class Elm327Session:
         except ElmError:
             pass  # some clones dislike ATI; the ATZ banner is good enough
 
-        self._transact("ATSP0", self._command_timeout)
-        # Triggers protocol auto-detection; SEARCHING... may take ~10-20 s.
-        self._transact("0100", self._probe_timeout)
-
         protocol_number: str | None = None
         protocol: str | None = None
-        try:
-            protocol_number = _first_line(self._transact("ATDPN", self._command_timeout)) or None
-            protocol = _first_line(self._transact("ATDP", self._command_timeout)) or None
-        except ElmError:
-            pass  # best-effort: not all clones implement ATDP*
+        if probe_vehicle:
+            self._transact("ATSP0", self._command_timeout)
+            # Triggers protocol auto-detection; SEARCHING... may take ~10-20 s.
+            self._transact("0100", self._probe_timeout)
+
+            try:
+                protocol_number = (
+                    _first_line(self._transact("ATDPN", self._command_timeout)) or None
+                )
+                protocol = _first_line(self._transact("ATDP", self._command_timeout)) or None
+            except ElmError:
+                pass  # best-effort: not all clones implement ATDP*
 
         return SessionInfo(
             adapter=adapter,

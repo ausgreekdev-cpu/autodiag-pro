@@ -111,6 +111,7 @@ def connect_elm327(
     serial_factory: SerialFactory | None = None,
     session_options: dict[str, float] | None = None,
     on_status: Callable[[str], None] | None = None,
+    probe_vehicle: bool = True,
 ) -> Connection:
     """Open ``device``, auto-detect baud rate, run the ELM327 init sequence.
 
@@ -118,6 +119,9 @@ def connect_elm327(
     banner. Once an adapter is found, vehicle-side errors (ignition off, no
     data) surface immediately instead of churning through more baud rates.
     Port-level failures (permissions, unplugged) also stop immediately.
+
+    ``probe_vehicle=False`` verifies the adapter alone (no ``0100`` bus
+    probe) so callers can smoke-test hardware without a vehicle present.
     """
     status = on_status if on_status is not None else (lambda _msg: None)
     last_error: Exception | None = None
@@ -129,7 +133,7 @@ def connect_elm327(
             **(session_options or {}),
         )
         try:
-            info = session.initialize()
+            info = session.initialize(probe_vehicle=probe_vehicle)
         except TransportError:
             session.close()
             raise

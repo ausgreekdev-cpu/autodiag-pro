@@ -33,6 +33,18 @@ def test_initialize_happy_path():
     ]
 
 
+def test_initialize_without_vehicle_probe_skips_bus():
+    session, transport = make_session()
+    info = session.initialize(probe_vehicle=False)
+
+    assert info.adapter == "ELM327 v1.5"
+    assert info.voltage == pytest.approx(12.6)
+    assert info.protocol is None and info.protocol_number is None
+    assert "0100" not in transport.writes
+    assert "ATSP0" not in transport.writes
+    assert transport.writes == ["ATZ", "ATE0", "ATL0", "ATS0", "ATH0", "ATRV", "ATI"]
+
+
 def test_command_returns_cleaned_payload():
     session, _transport = make_session()
     session.initialize()
