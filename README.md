@@ -47,6 +47,8 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **Session compare** — diff any two saved sessions: codes added/removed,
   readiness and MIL flips, Mode $06 pass/fail changes, live-value deltas,
   plus a warning when the two VINs differ
+- **Command-line tools** — headless `autodiag doctor` adapter smoke test
+  (works without a car) and `autodiag scan` report generation
 
 Fully offline: no accounts, no servers — everything runs on your machine.
 
@@ -78,6 +80,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 10. Live-data CSV logger (v0.5.0) | done |
 | 11. Log viewer (v0.6.0) | done |
 | 12. Session compare (v0.7.0) | done |
+| 13. CLI + hardware smoke test (v0.8.0) | done |
 
 ## Install & run
 
@@ -123,6 +126,30 @@ autodiag            # or: python -m autodiag
 8. **Log viewer** — pick any recorded log (or *Browse…* for a CSV elsewhere),
    tick parameters to plot them, hover the graph for a cursor readout, and
    *Export image…* to save the chart as a PNG.
+
+## Command-line tools
+
+The same `autodiag` entry point doubles as a headless CLI (no GUI, no Qt):
+
+```bash
+autodiag ports                # list serial ports
+autodiag doctor               # adapter smoke test: banner, voltage, baud
+autodiag doctor --vehicle     # ... + 0100 bus probe (ignition on)
+autodiag scan -o report.json  # full headless scan → JSON/CSV report
+```
+
+- **ports** — every serial device the OS knows about (USB serial + paired BT SPP).
+- **doctor** — verifies an ELM327 **without a vehicle**: reset banner, adapter id,
+  voltage, auto-baud. Exit code 0 = PASS, 1 = FAIL, so it works in scripts.
+  `--vehicle` additionally probes the bus (`0100`) and reports whether a vehicle
+  answered (not required for PASS).
+- **scan** — connects, reads VIN/DTCs/readiness/freeze frame/Mode $06, then polls
+  live PIDs (`--pids`, default `0C,0D,05`) for `--seconds` (default 5) at
+  `--interval` and writes the report. `--device` picks the port (defaults to the
+  only port present); output defaults to `autodiag-scan-<timestamp>.json`.
+
+Both `autodiag ...` and `python -m autodiag ...` work. On Windows prefer the
+pip-installed `autodiag` script — the bundled `.exe` is a windowed GUI build.
 
 ## Development
 
