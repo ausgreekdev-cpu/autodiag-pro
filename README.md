@@ -89,6 +89,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 13. CLI + hardware smoke test (v0.8.0) | done |
 | 14. Graph windows + pause (v0.9.0) | done |
 | 15. PID explorer (v0.10.0) | done |
+| 16. Packaging polish (v0.11.0) | done |
 
 ## Install & run
 
