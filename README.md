@@ -34,6 +34,9 @@ port (USB cable or paired Bluetooth SPP dongle).
   restored on launch; tick *Auto* in the toolbar to reconnect without clicking
 - **Find parameters fast** — dashboard search (name or hex PID) + category filter
 - **Graph snapshots** — save the live graph as a PNG (*Save image…*)
+- **Graph windows + pause** — pick the visible time window (30 s / 2 min /
+  10 min / All), freeze the plot with *Pause* while values keep logging, or
+  start over with *Clear*
 - **Every ECU's codes** — multi-ECU mode $03/$07/$0A replies are parsed per
   message, so a second ECU never produces phantom DTCs
 - **Session history** — every scan auto-saves to disk on close (last 50 kept);
@@ -81,6 +84,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 11. Log viewer (v0.6.0) | done |
 | 12. Session compare (v0.7.0) | done |
 | 13. CLI + hardware smoke test (v0.8.0) | done |
+| 14. Graph windows + pause (v0.9.0) | done |
 
 ## Install & run
 
@@ -104,7 +108,10 @@ autodiag            # or: python -m autodiag
 3. **Dashboard** — gauges and the value table update live; the poll interval (default
    250 ms) controls request spacing. Tick rows to graph those parameters, use
    *Filter parameters…* / the category dropdown to narrow the table, and *Save
-   image…* to export the graph as a PNG. The *Log* checkbox (on by default) appends
+   image…* to export the graph as a PNG. The *Window* dropdown limits the graph
+   to the last 30 s / 2 min / 10 min (or *All* of the buffer), *Pause* freezes
+   the plot without stopping the poll or the log, and *Clear* erases it. The
+   *Log* checkbox (on by default) appends
    every polled value to a CSV in the app-data `logs/` folder — the label beside it
    shows the current file and row count; untick it to stop. Failed PIDs are dropped
    automatically after 3 timeouts, and a lost adapter connection is retried by itself
