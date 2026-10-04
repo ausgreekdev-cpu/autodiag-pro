@@ -22,6 +22,14 @@ def test_version_matches_pyproject():
     assert data["project"]["version"] == autodiag.__version__
 
 
+def test_packaged_icon_is_valid_png():
+    from autodiag.data import read_bytes
+
+    blob = read_bytes("icon-256.png")
+    assert blob.startswith(b"\x89PNG\r\n\x1a\n")
+    assert len(blob) > 1000
+
+
 def test_entry_point_launches_gui(monkeypatch):
     import autodiag.ui.app as ui_app
 

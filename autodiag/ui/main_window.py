@@ -27,6 +27,7 @@ from autodiag.services.live_log import LiveLog
 from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
 from autodiag.transports.serial_transport import SerialPortInfo, list_serial_ports
+from autodiag.ui.icons import app_icon
 from autodiag.ui.panels.dashboard import DashboardPanel
 from autodiag.ui.panels.explorer import PidExplorerPanel
 from autodiag.ui.panels.freeze import FreezeFramePanel
@@ -64,6 +65,7 @@ class MainWindow(QMainWindow):
         self._live_log.set_armed(self._prefs.auto_log())
 
         self.setWindowTitle("AutoDiag Pro")
+        self.setWindowIcon(app_icon())
         self.resize(1240, 820)
         self.setMinimumSize(960, 640)
 

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QLabel, QPushButton, QStackedWidget
 from autodiag.obd.elm327 import SessionInfo
 from autodiag.services.history import SessionStore
 from autodiag.services.worker import ObdWorker
+from autodiag.ui.icons import app_icon
 from autodiag.ui.main_window import MainWindow
 from autodiag.ui.panels.dashboard import DashboardPanel
 from autodiag.ui.prefs import Prefs
@@ -197,6 +198,15 @@ def test_main_window_explorer_graph_pin(qapp, tmp_path):
     window.worker.pids_supported.emit({0x0C, 0x0D})
     window._explorer.graph_pid.emit(0x0D)
     assert window._dashboard.is_graphed(0x0D)
+    window.close()
+
+
+def test_app_icon_and_main_window_icon(qapp, tmp_path):
+    icon = app_icon()
+    assert not icon.pixmap(32, 32).isNull()
+
+    window = MainWindow(prefs=_fresh_prefs(tmp_path))
+    assert not window.windowIcon().pixmap(32, 32).isNull()
     window.close()
 
 

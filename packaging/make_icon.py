@@ -1,7 +1,10 @@
-"""Generate the app icon: packaging/autodiag.ico + assets/icon-256.png.
+"""Generate the app icon: packaging/autodiag.ico + two icon-256.png copies.
 
 Run from the repository root:  python packaging/make_icon.py
 (The drawing is done on a 1024px canvas and downsampled for crisp edges.)
+
+assets/ holds the README badge copy; autodiag/data/ is the copy shipped
+inside the package (window/taskbar icon + PyInstaller bundle).
 """
 
 from __future__ import annotations
@@ -13,7 +16,10 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 ICO_PATH = ROOT / "packaging" / "autodiag.ico"
-PNG_PATH = ROOT / "assets" / "icon-256.png"
+PNG_PATHS = (
+    ROOT / "assets" / "icon-256.png",
+    ROOT / "autodiag" / "data" / "icon-256.png",
+)
 
 S = 1024  # supersampled canvas
 BG = (15, 20, 26, 255)
@@ -64,15 +70,17 @@ def main() -> None:
     icon = draw_icon()
 
     png256 = icon.resize((256, 256), Image.Resampling.LANCZOS)
-    PNG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    png256.save(PNG_PATH)
+    for path in PNG_PATHS:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        png256.save(path)
 
     sizes = [16, 24, 32, 48, 64, 128, 256]
     ICO_PATH.parent.mkdir(parents=True, exist_ok=True)
     png256.save(ICO_PATH, format="ICO", sizes=[(s, s) for s in sizes])
 
     print(f"wrote {ICO_PATH.relative_to(ROOT)} ({ICO_PATH.stat().st_size} bytes)")
-    print(f"wrote {PNG_PATH.relative_to(ROOT)} ({PNG_PATH.stat().st_size} bytes)")
+    for path in PNG_PATHS:
+        print(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size} bytes)")
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
+from autodiag.ui.icons import app_icon
 from autodiag.ui.main_window import MainWindow
 from autodiag.ui.theme import apply_theme
 
@@ -14,6 +15,7 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication(argv if argv is not None else sys.argv)
     app.setApplicationName("AutoDiag Pro")
     app.setOrganizationName("AutoDiagPro")
+    app.setWindowIcon(app_icon())
     apply_theme(app)
 
     window = MainWindow()

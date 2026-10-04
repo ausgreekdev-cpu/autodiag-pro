@@ -29,7 +29,7 @@ autodiag = "autodiag.__main__:main"
 include = ["autodiag*"]
 
 [tool.setuptools.package-data]
-autodiag = ["data/*.json", "data/*.txt"]
+autodiag = ["data/*.json", "data/*.txt", "data/*.png"]
 
 [tool.ruff]
 line-length = 100
