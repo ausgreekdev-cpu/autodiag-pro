@@ -17,6 +17,10 @@ def _as_qbytearray(value: object) -> QByteArray | None:
     return None
 
 
+GRAPH_WINDOW_DEFAULT = "2 min"
+GRAPH_WINDOW_CHOICES = ("30 s", "2 min", "10 min", "All")
+
+
 class Prefs:
     def __init__(self, settings: QSettings | None = None) -> None:
         self._s = settings if settings is not None else QSettings(
@@ -63,6 +67,17 @@ class Prefs:
 
     def set_poll_interval_ms(self, ms: int) -> None:
         self._s.setValue("poll_interval_ms", int(ms))
+
+    # -- graph ----------------------------------------------------------------
+
+    def graph_window(self) -> str:
+        """Dashboard graph time-window label (validated against the choices)."""
+        raw = str(self._s.value("graph_window", GRAPH_WINDOW_DEFAULT) or "")
+        return raw if raw in GRAPH_WINDOW_CHOICES else GRAPH_WINDOW_DEFAULT
+
+    def set_graph_window(self, label: str) -> None:
+        value = label if label in GRAPH_WINDOW_CHOICES else GRAPH_WINDOW_DEFAULT
+        self._s.setValue("graph_window", value)
 
     # -- layout -----------------------------------------------------------------
 

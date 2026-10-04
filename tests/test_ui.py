@@ -178,6 +178,49 @@ def test_live_graph_set_series_applies_full_ranges(qapp):
     assert ymin <= 10.0 and ymax >= 30.0
 
 
+def test_dashboard_graph_window_combo_drives_graph(qapp, tmp_path):
+    prefs = Prefs(QSettings(str(tmp_path / "p.ini"), QSettings.Format.IniFormat))
+    worker = ObdWorker()
+    panel = DashboardPanel(worker, prefs)
+
+    assert panel._graph.window == 120.0  # default label "2 min"
+    panel._window_combo.setCurrentText("30 s")
+    assert panel._graph.window == 30.0
+    assert prefs.graph_window() == "30 s"
+    panel._window_combo.setCurrentText("All")
+    assert panel._graph.window is None
+
+    # the choice survives a new panel instance
+    again = DashboardPanel(ObdWorker(), prefs)
+    assert again._window_combo.currentText() == "All"
+    assert again._graph.window is None
+
+
+def test_dashboard_pause_and_clear_buttons(qapp):
+    worker = ObdWorker()
+    panel = DashboardPanel(worker)
+    worker.pids_supported.emit({0x0C})
+    worker.pid_value.emit(0x0C, 1726.0, 1.0)
+    xs, _ys = panel._graph._curves[0x0C].getData()
+    assert len(xs) == 1
+
+    panel._pause_btn.click()
+    assert panel._graph.paused is True
+    assert panel._pause_btn.text() == "Resume"
+    worker.pid_value.emit(0x0C, 1800.0, 1.25)  # values keep arriving …
+    xs, _ys = panel._graph._curves[0x0C].getData()
+    assert len(xs) == 1  # … but the plot stays frozen
+
+    panel._pause_btn.click()
+    assert panel._graph.paused is False
+    xs, _ys = panel._graph._curves[0x0C].getData()
+    assert len(xs) == 2  # resume catches up immediately
+
+    panel._clear_btn.click()
+    xs, _ys = panel._graph._curves[0x0C].getData()
+    assert not xs and not _ys
+
+
 def test_dashboard_save_image_dialog_writes_png(qapp, tmp_path, monkeypatch):
     from autodiag.ui.panels import dashboard as dashboard_mod
 

@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from autodiag.obd.pids import PID_REGISTRY, request_pid
 from autodiag.services.worker import ObdWorker
-from autodiag.ui.prefs import Prefs
+from autodiag.ui.prefs import GRAPH_WINDOW_CHOICES, Prefs
 from autodiag.ui.widgets.gauge import Gauge
 from autodiag.ui.widgets.graph import LiveGraph
 
@@ -33,6 +33,7 @@ _GAUGE_LABELS = ("Engine speed", "Vehicle speed", "Coolant temp", "Engine load")
 _GAUGE_RANGES = {0x0C: (0.0, 8000.0), 0x0D: (0.0, 240.0), 0x05: (0.0, 130.0), 0x04: (0.0, 100.0)}
 
 _COL_GRAPH, _COL_PID, _COL_NAME, _COL_VALUE, _COL_UNIT = range(5)
+_WINDOW_SECONDS = {"30 s": 30.0, "2 min": 120.0, "10 min": 600.0, "All": None}
 
 
 class DashboardPanel(QWidget):
@@ -169,12 +170,31 @@ class DashboardPanel(QWidget):
         graph_hint.setObjectName("subtle")
         graph_top.addWidget(graph_hint)
         graph_top.addStretch(1)
+        window_label = QLabel("Window")
+        window_label.setObjectName("subtle")
+        graph_top.addWidget(window_label)
+        self._window_combo = QComboBox()
+        self._window_combo.addItems(GRAPH_WINDOW_CHOICES)
+        self._window_combo.setToolTip("Visible time window on the graph")
+        self._window_combo.setCurrentText(self._prefs.graph_window())
+        self._window_combo.currentTextChanged.connect(self._on_window_changed)
+        graph_top.addWidget(self._window_combo)
+        self._pause_btn = QPushButton("Pause")
+        self._pause_btn.setCheckable(True)
+        self._pause_btn.setToolTip("Freeze the graph (values keep logging)")
+        self._pause_btn.toggled.connect(self._on_pause_toggled)
+        graph_top.addWidget(self._pause_btn)
+        self._clear_btn = QPushButton("Clear")
+        self._clear_btn.setToolTip("Erase plotted history")
+        self._clear_btn.clicked.connect(self._graph_clear)
+        graph_top.addWidget(self._clear_btn)
         self._export_btn = QPushButton("Save image…")
         self._export_btn.setToolTip("Export the current graph as a PNG")
         self._export_btn.clicked.connect(self._export_graph)
         graph_top.addWidget(self._export_btn)
         graph_layout.addLayout(graph_top)
         self._graph = LiveGraph()
+        self._graph.set_window(_WINDOW_SECONDS.get(self._prefs.graph_window()))
         graph_layout.addWidget(self._graph, 1)
 
         splitter.addWidget(table_box)
@@ -294,6 +314,17 @@ class DashboardPanel(QWidget):
     def _on_log_toggled(self, checked: bool) -> None:
         self._prefs.set_auto_log(checked)
         self.log_toggled.emit(checked)
+
+    def _on_window_changed(self, label: str) -> None:
+        self._prefs.set_graph_window(label)
+        self._graph.set_window(_WINDOW_SECONDS.get(label))
+
+    def _on_pause_toggled(self, checked: bool) -> None:
+        self._pause_btn.setText("Resume" if checked else "Pause")
+        self._graph.set_paused(checked)
+
+    def _graph_clear(self) -> None:
+        self._graph.clear()
 
     def set_log_status(self, name: str | None, rows: int) -> None:
         """Show the active log file (or clear the label when off/unknown)."""
