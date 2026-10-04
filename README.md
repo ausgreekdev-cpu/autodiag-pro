@@ -50,6 +50,9 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **Session compare** — diff any two saved sessions: codes added/removed,
   readiness and MIL flips, Mode $06 pass/fail changes, live-value deltas,
   plus a warning when the two VINs differ
+- **PID explorer** — request any parameter on demand and see the raw response
+  beside the decoded value; *Force* sends unsupported PIDs too, and one click
+  pins the parameter to the dashboard graph
 - **Command-line tools** — headless `autodiag doctor` adapter smoke test
   (works without a car) and `autodiag scan` report generation
 
@@ -85,6 +88,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 12. Session compare (v0.7.0) | done |
 | 13. CLI + hardware smoke test (v0.8.0) | done |
 | 14. Graph windows + pause (v0.9.0) | done |
+| 15. PID explorer (v0.10.0) | done |
 
 ## Install & run
 
@@ -133,6 +137,10 @@ autodiag            # or: python -m autodiag
 8. **Log viewer** — pick any recorded log (or *Browse…* for a CSV elsewhere),
    tick parameters to plot them, hover the graph for a cursor readout, and
    *Export image…* to save the chart as a PNG.
+9. **PID explorer** — pick any supported parameter (the rest of the SAE
+   registry is listed too, marked *unsupported* and gated behind *Force*),
+   press *Request* to see the raw response next to the decoded value, and
+   *Graph this PID* to tick it in the dashboard graph.
 
 ## Command-line tools
 
