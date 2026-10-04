@@ -294,6 +294,13 @@ class ObdEngine:
     def _job_read_voltage(self, _payload: Any) -> None:
         self._emit("voltage", self._read_voltage())
 
+    def _job_request_pid(self, payload: Any) -> None:
+        pid = pid_dec.request_pid(int(payload))
+        text = self._req(f"01{pid:02X}")
+        self._emit("pid_response", pid, text)
+        for channel, value in pid_dec.parse_pid_values(text, pid).items():
+            self._emit("pid_value", channel, value, self._clock())
+
     # -- polling -------------------------------------------------------------
 
     def _maybe_poll(self) -> None:

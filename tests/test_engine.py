@@ -541,3 +541,39 @@ def test_elm_error_from_job_does_not_disconnect():
 
     assert sink.of("error")
     assert engine.connected
+
+
+def test_request_pid_emits_response_and_value():
+    connector, holder = scripted_connector()
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("request_pid", 0x0C)
+    engine.step(0.0)
+
+    pid, text = sink.last("pid_response")
+    assert pid == 0x0C
+    assert "41 0C" in text
+    channel, value, _timestamp = sink.last("pid_value")
+    assert channel == 0x0C
+    assert value == pytest.approx(1726.0)
+    assert "010C" in holder["transport"].writes
+
+
+def test_request_pid_normalizes_companion_ids():
+    connector, holder = scripted_connector({"0115": b"41 15 7A 90\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("request_pid", 0x115)  # companion id → base request
+    engine.step(0.0)
+
+    pid, _text = sink.last("pid_response")
+    assert pid == 0x15
+    writes = holder["transport"].writes
+    assert "0115" in writes
+    assert not any(cmd.startswith("01115") for cmd in writes)

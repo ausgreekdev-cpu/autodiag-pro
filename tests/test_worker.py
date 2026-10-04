@@ -79,3 +79,30 @@ def test_worker_read_freeze_all_submits_frame(app):
     assert worker.engine._jobs.get_nowait() == ("read_freeze_all", 2)
     worker.read_freeze_all()
     assert worker.engine._jobs.get_nowait() == ("read_freeze_all", 0)
+
+
+def test_worker_request_pid_round_trip(app):
+    connector, _holder = scripted_connector()
+    worker = ObdWorker(connector=connector)
+    seen: dict = {"supported": None, "response": None, "values": []}
+    errors: list[str] = []
+    worker.pids_supported.connect(lambda s: seen.update(supported=s))
+    worker.pid_response.connect(lambda pid, text: seen.update(response=(pid, text)))
+    worker.pid_value.connect(lambda pid, value, _t: seen["values"].append((pid, value)))
+    worker.error.connect(errors.append)
+
+    worker.start()
+    worker.set_poll({0x0C}, 0.0)  # narrow before connect (see test above)
+    worker.connect_to("X")
+    assert _wait_until(app, lambda: seen["supported"] is not None), "no pids_supported"
+
+    worker.request_pid(0x0D)
+    assert _wait_until(app, lambda: seen["response"] is not None), "no pid_response"
+    pid, text = seen["response"]
+    assert pid == 0x0D
+    assert "41 0D" in text
+    assert _wait_until(app, lambda: any(p == 0x0D for p, _v in seen["values"]))
+
+    worker.shutdown()
+    assert not worker.isRunning()
+    assert errors == []

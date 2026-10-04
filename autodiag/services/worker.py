@@ -22,6 +22,7 @@ class ObdWorker(QThread):
     disconnected = Signal(str)  # reason
     pids_supported = Signal(object)  # set[int]
     pid_value = Signal(int, float, float)  # pid, value, monotonic timestamp
+    pid_response = Signal(int, str)  # base pid, cleaned `01 <pid>` response text
     dtcs = Signal(str, object)  # source ("stored"/"pending"/"permanent"), list[str]
     cleared = Signal(bool)
     monitors = Signal(object)  # MonitorStatus
@@ -41,6 +42,7 @@ class ObdWorker(QThread):
         "disconnected",
         "pids_supported",
         "pid_value",
+        "pid_response",
         "dtcs",
         "cleared",
         "monitors",
@@ -95,6 +97,10 @@ class ObdWorker(QThread):
 
     def read_voltage(self) -> None:
         self._engine.submit("read_voltage")
+
+    def request_pid(self, pid: int) -> None:
+        """One-shot request for any parameter (supported or forced)."""
+        self._engine.submit("request_pid", pid)
 
     # -- lifecycle -------------------------------------------------------------
 
