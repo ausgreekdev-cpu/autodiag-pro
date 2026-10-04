@@ -30,6 +30,47 @@ def test_packaged_icon_is_valid_png():
     assert len(blob) > 1000
 
 
+def test_version_info_file_matches_package_version():
+    import importlib.util
+    import tomllib
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    spec = importlib.util.spec_from_file_location(
+        "make_version_info", root / "packaging" / "make_version_info.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    expected = module.build_version_text(pyproject["project"]["version"])
+    committed = (root / "packaging" / "version_info.txt").read_text(encoding="utf-8")
+    assert committed == expected, (
+        "packaging/version_info.txt is stale — rerun "
+        "`python packaging/make_version_info.py`"
+    )
+
+
+def test_manifest_declares_per_monitor_dpi():
+    import xml.dom.minidom
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    manifest = root / "packaging" / "autodiag.manifest"
+    assert manifest.exists()
+    dom = xml.dom.minidom.parse(str(manifest))  # parses or raises
+    settings = [
+        node
+        for node in dom.getElementsByTagName("windowsSettings")[0].childNodes
+        if node.nodeType == node.ELEMENT_NODE
+    ]
+    names = [node.tagName for node in settings]
+    assert "dpiAwareness" in names and "dpiAware" in names
+    awareness = next(node for node in settings if node.tagName == "dpiAwareness")
+    assert "PerMonitorV2" in awareness.firstChild.data
+
+
 def test_entry_point_launches_gui(monkeypatch):
     import autodiag.ui.app as ui_app
 

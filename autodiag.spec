@@ -47,4 +47,9 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     icon="packaging/autodiag.ico",
+    # Windows-only: file properties (version/product metadata) and the app
+    # manifest (PerMonitorV2 DPI awareness, common controls v6). Both are
+    # ignored with a warning on other platforms, like icon= above.
+    version="packaging/version_info.txt",
+    manifest="packaging/autodiag.manifest",
 )

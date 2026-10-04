@@ -53,6 +53,34 @@ jobs:
             echo "smoke test failed: expected the app to stay alive for 8s"
             exit 1
           fi
+      - name: Smoke test + version resource (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $p = Start-Process -FilePath "dist\autodiag.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) {
+            Write-Error "smoke test failed: exe exited early with code $($p.ExitCode)"
+            exit 1
+          }
+          Stop-Process -Id $p.Id -Force
+          $vi = (Get-Item "dist\autodiag.exe").VersionInfo
+          $content = Get-Content pyproject.toml -Raw
+          if ($content -notmatch 'version = "([^"]+)"') {
+            Write-Error "could not read version from pyproject.toml"
+            exit 1
+          }
+          $expected = $Matches[1]
+          if ($vi.FileVersion -notlike "$expected*") {
+            Write-Error "FileVersion '$($vi.FileVersion)' does not start with $expected"
+            exit 1
+          }
+          if ($vi.ProductName -ne "AutoDiag Pro") {
+            Write-Error "ProductName is '$($vi.ProductName)', expected 'AutoDiag Pro'"
+            exit 1
+          }
+          Write-Host "FileVersion=$($vi.FileVersion) ProductName=$($vi.ProductName)"
       - name: Rename
         shell: bash
         run: mv "dist/autodiag${{ runner.os == 'Windows' && '.exe' || '' }}" "dist/${{ matrix.artifact }}"
