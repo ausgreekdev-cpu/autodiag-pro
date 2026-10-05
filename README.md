@@ -14,6 +14,10 @@ port (USB cable or paired Bluetooth SPP dongle).
 
 ## Features
 
+- **Overview dashboard** — the launch landing page: connection status with live
+  voltage, VIN and supported-parameter count, trouble-code totals, emissions
+  readiness (MIL + monitor completion), your last saved session, and one-click
+  shortcuts into the panels
 - **Live data** — engine RPM, speed, coolant, load, fuel trims, O2 sensors (voltage
   **and** short-term fuel trim per sensor)... ~40 SAE J1979 PIDs discovered from the
   vehicle (`0100` supported-PID bitmaps), four headline gauges + a scrolling graph of
@@ -95,6 +99,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 15. PID explorer (v0.10.0) | done |
 | 16. Packaging polish (v0.11.0) | done |
 | 17. Update check (v0.12.0) | done |
+| 18. Overview dashboard (v0.13.0) | done |
 
 ## Install & run
 
@@ -110,12 +115,16 @@ autodiag            # or: python -m autodiag
 
 1. **Plug in the adapter** — USB serial, or pair the Bluetooth SPP dongle in your OS
    settings first (typical PIN `1234`/`0000`).
-2. **Pick the port** in the toolbar (press *Refresh* if it is not listed) and press
+2. **Overview** — the landing page: connection status and live voltage, VIN with
+   the supported-parameter count, trouble-code totals, emissions readiness, your
+   last saved session, and quick-action buttons into the other panels. Fresh
+   installs open here; once you pick a panel it is remembered.
+3. **Pick the port** in the toolbar (press *Refresh* if it is not listed) and press
    **Connect**. The app auto-detects the baud rate, initializes the ELM327 and
    discovers which PIDs the vehicle supports. Tick *Auto* to reconnect to this port
    automatically on the next launch — the poll interval and window layout are
    remembered either way.
-3. **Dashboard** — gauges and the value table update live; the poll interval (default
+4. **Dashboard** — gauges and the value table update live; the poll interval (default
    250 ms) controls request spacing. Tick rows to graph those parameters, use
    *Filter parameters…* / the category dropdown to narrow the table, and *Save
    image…* to export the graph as a PNG. The *Window* dropdown limits the graph
@@ -126,28 +135,28 @@ autodiag            # or: python -m autodiag
    shows the current file and row count; untick it to stop. Failed PIDs are dropped
    automatically after 3 timeouts, and a lost adapter connection is retried by itself
    (1 s → 15 s backoff, 5 attempts).
-4. **Trouble codes** — press *Read codes*; switch tabs for pending/permanent.
+5. **Trouble codes** — press *Read codes*; switch tabs for pending/permanent.
    *Clear codes* asks for confirmation first.
-5. **Readiness / Freeze frame / Vehicle info / Mode $06** — each panel has its own
+6. **Readiness / Freeze frame / Vehicle info / Mode $06** — each panel has its own
    read button; results stay available for the report. The freeze-frame panel can
    read any of frames 0–2 and keeps each frame cached for comparison.
-6. **Settings** — export the whole session (VIN, codes, monitors, Mode $06, latest
+7. **Settings** — export the whole session (VIN, codes, monitors, Mode $06, latest
    readings) as JSON or CSV, or press *Check for updates* to compare the running
    version with the latest GitHub release.
-7. **History** — past sessions appear here automatically when you close the app
+8. **History** — past sessions appear here automatically when you close the app
    (the newest 50 are kept). Select one to preview it, re-export it as JSON/CSV,
    or delete it; the *Log* column shows which sessions have a CSV time series,
    and *View log…* opens one straight in the Log viewer. *Compare…* opens two
    sessions side by side — codes gained/lost, readiness flips, test changes
    and value deltas — defaulting to your selection against the newest other
    session.
-8. **Log viewer** — pick any recorded log (or *Browse…* for a CSV elsewhere),
+9. **Log viewer** — pick any recorded log (or *Browse…* for a CSV elsewhere),
    tick parameters to plot them, hover the graph for a cursor readout, and
    *Export image…* to save the chart as a PNG.
-9. **PID explorer** — pick any supported parameter (the rest of the SAE
-   registry is listed too, marked *unsupported* and gated behind *Force*),
-   press *Request* to see the raw response next to the decoded value, and
-   *Graph this PID* to tick it in the dashboard graph.
+10. **PID explorer** — pick any supported parameter (the rest of the SAE
+    registry is listed too, marked *unsupported* and gated behind *Force*),
+    press *Request* to see the raw response next to the decoded value, and
+    *Graph this PID* to tick it in the dashboard graph.
 
 ## Command-line tools
 
