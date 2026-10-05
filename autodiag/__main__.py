@@ -4,7 +4,7 @@ import sys
 
 from autodiag import __version__
 
-_CLI_ARGS = {"ports", "doctor", "scan", "-h", "--help", "--version"}
+_CLI_ARGS = {"ports", "doctor", "scan", "updates", "-h", "--help", "--version"}
 
 
 def main(argv: list[str] | None = None) -> None:

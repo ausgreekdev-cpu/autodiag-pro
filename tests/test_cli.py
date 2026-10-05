@@ -10,6 +10,7 @@ import pytest
 import autodiag.__main__ as entry
 from autodiag import cli
 from autodiag.obd.elm327 import Elm327Session
+from autodiag.services.update_check import UpdateCheck
 from autodiag.transports.base import TransportError
 from autodiag.transports.serial_transport import Connection, SerialPortInfo
 from tests.fakes import FakeTransport, elm_script, scripted_connector
@@ -208,3 +209,38 @@ def test_entry_without_args_launches_gui(monkeypatch):
     with pytest.raises(SystemExit) as excinfo:
         entry.main()
     assert excinfo.value.code == 7
+
+
+def test_updates_reports_available_release(capsys, monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "check_for_update",
+        lambda _current, timeout=0.0: UpdateCheck(
+            status="update", latest="v9.9.9", url="https://example.test/r"
+        ),
+    )
+    assert cli.main(["updates"]) == 0
+    out = capsys.readouterr().out
+    assert "v9.9.9 is available" in out
+    assert "https://example.test/r" in out
+
+
+def test_updates_reports_current_version(capsys, monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "check_for_update",
+        lambda _current, timeout=0.0: UpdateCheck(status="current", latest="v0.11.0"),
+    )
+    assert cli.main(["updates"]) == 0
+    assert "up to date" in capsys.readouterr().out
+
+
+def test_updates_failure_returns_1(capsys, monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "check_for_update",
+        lambda _current, timeout=0.0: UpdateCheck(status="error", message="HTTP 404"),
+    )
+    assert cli.main(["updates"]) == 1
+    err = capsys.readouterr().err
+    assert "failed" in err and "HTTP 404" in err

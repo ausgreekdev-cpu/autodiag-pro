@@ -1,4 +1,4 @@
-"""Headless CLI: serial-port listing, adapter smoke test, and scripted scans.
+"""Headless CLI: serial-port listing, adapter smoke test, scans, update check.
 
 Pure Python (no Qt): the OBD engine is driven synchronously with ``step()``,
 so every command is deterministic and testable against the fake transports.
@@ -17,6 +17,7 @@ from autodiag.obd.elm327 import ElmError
 from autodiag.services.engine import Connector, ObdEngine
 from autodiag.services.export import write_report
 from autodiag.services.record import ScanRecord
+from autodiag.services.update_check import check_for_update
 from autodiag.transports.base import TransportError
 from autodiag.transports.serial_transport import connect_elm327, list_serial_ports
 
@@ -50,6 +51,19 @@ def cmd_ports() -> int:
     for p in ports:
         print(f"{p.device}  {p.description}")
     return 0
+
+
+def cmd_updates(timeout: float = 5.0) -> int:
+    """Compare the running version with GitHub's latest release (exit 1 on failure)."""
+    result = check_for_update(__version__, timeout=timeout)
+    if result.status == "update":
+        print(f"{result.latest} is available — {result.url}")
+        return 0
+    if result.status == "current":
+        print(f"You're up to date (v{__version__}).")
+        return 0
+    print(f"Update check failed: {result.message}", file=sys.stderr)
+    return 1
 
 
 def run_doctor(
@@ -189,6 +203,10 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--seconds", type=float, default=5.0, help="live-poll duration (default: 5)")
     scan.add_argument("--interval", type=float, default=0.25, help="poll interval in seconds")
     scan.add_argument("--pids", help="comma-separated hex PIDs to poll (default: 0C,0D,05)")
+    updates = sub.add_parser("updates", help="check GitHub for a newer release")
+    updates.add_argument(
+        "--timeout", type=float, default=5.0, help="request timeout in seconds"
+    )
     return parser
 
 
@@ -218,5 +236,7 @@ def main(argv: list[str] | None = None) -> int:
             interval=args.interval,
             pids=pids,
         )
+    if args.command == "updates":
+        return cmd_updates(timeout=args.timeout)
     parser.print_help(sys.stderr)
     return 2
