@@ -53,10 +53,14 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **PID explorer** — request any parameter on demand and see the raw response
   beside the decoded value; *Force* sends unsupported PIDs too, and one click
   pins the parameter to the dashboard graph
+- **Update check** — press *Check for updates* in Settings (or run
+  `autodiag updates`) to compare against the latest GitHub release; one
+  request, only when you ask
 - **Command-line tools** — headless `autodiag doctor` adapter smoke test
   (works without a car) and `autodiag scan` report generation
 
 Fully offline: no accounts, no servers — everything runs on your machine.
+The only optional network call is the update check you trigger yourself.
 
 ## Download
 
@@ -90,6 +94,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 14. Graph windows + pause (v0.9.0) | done |
 | 15. PID explorer (v0.10.0) | done |
 | 16. Packaging polish (v0.11.0) | done |
+| 17. Update check (v0.12.0) | done |
 
 ## Install & run
 
@@ -127,7 +132,8 @@ autodiag            # or: python -m autodiag
    read button; results stay available for the report. The freeze-frame panel can
    read any of frames 0–2 and keeps each frame cached for comparison.
 6. **Settings** — export the whole session (VIN, codes, monitors, Mode $06, latest
-   readings) as JSON or CSV.
+   readings) as JSON or CSV, or press *Check for updates* to compare the running
+   version with the latest GitHub release.
 7. **History** — past sessions appear here automatically when you close the app
    (the newest 50 are kept). Select one to preview it, re-export it as JSON/CSV,
    or delete it; the *Log* column shows which sessions have a CSV time series,
@@ -152,6 +158,7 @@ autodiag ports                # list serial ports
 autodiag doctor               # adapter smoke test: banner, voltage, baud
 autodiag doctor --vehicle     # ... + 0100 bus probe (ignition on)
 autodiag scan -o report.json  # full headless scan → JSON/CSV report
+autodiag updates              # compare against the latest GitHub release
 ```
 
 - **ports** — every serial device the OS knows about (USB serial + paired BT SPP).
@@ -163,6 +170,8 @@ autodiag scan -o report.json  # full headless scan → JSON/CSV report
   live PIDs (`--pids`, default `0C,0D,05`) for `--seconds` (default 5) at
   `--interval` and writes the report. `--device` picks the port (defaults to the
   only port present); output defaults to `autodiag-scan-<timestamp>.json`.
+- **updates** — one GitHub API request; prints the newer release (with URL) or
+  "You're up to date". Exit code 0 = checked, 1 = the check failed.
 
 Both `autodiag ...` and `python -m autodiag ...` work. On Windows prefer the
 pip-installed `autodiag` script — the bundled `.exe` is a windowed GUI build.
