@@ -274,6 +274,27 @@ def test_settings_check_updates_error_and_current(qapp, monkeypatch):
     assert "up to date" in panel._update_label.text()
 
 
+def test_update_check_worker_emits_done(qapp, monkeypatch):
+    import autodiag.services.update_check as update_check
+    from autodiag.ui.panels.settings import UpdateCheckWorker
+
+    monkeypatch.setattr(
+        update_check,
+        "check_for_update",
+        lambda _current: UpdateCheck(status="current", latest="v0.11.0"),
+    )
+    worker = UpdateCheckWorker("0.11.0")
+    received: list[object] = []
+    worker.done.connect(received.append)
+
+    worker.start()
+    assert _wait_until(qapp, lambda: received), "worker never finished"
+    assert not worker.isRunning()
+    result = received[0]
+    assert isinstance(result, UpdateCheck)
+    assert result.status == "current"
+
+
 # -- session history ---------------------------------------------------------------
 
 def _history_store(tmp_path) -> SessionStore:

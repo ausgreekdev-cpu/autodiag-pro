@@ -7,8 +7,6 @@ import urllib.error
 import pytest
 
 from autodiag.services.update_check import (
-    UpdateCheck,
-    UpdateCheckWorker,
     check_for_update,
     is_newer,
     parse_version,
@@ -85,36 +83,3 @@ def test_check_bad_tag_is_error():
 def test_check_missing_keys_is_error():
     result = check_for_update("0.1.0", fetch=lambda _u, _t: {})
     assert result.status == "error"
-
-
-def test_update_check_worker_emits_done(qapp, monkeypatch):
-    import autodiag.services.update_check as update_check
-
-    monkeypatch.setattr(
-        update_check,
-        "check_for_update",
-        lambda _current: UpdateCheck(status="current", latest="v0.11.0"),
-    )
-    worker = UpdateCheckWorker("0.11.0")
-    received: list[object] = []
-    worker.done.connect(received.append)
-
-    worker.start()
-    deadline = 5.0
-    assert _wait_until(qapp, lambda: received, deadline), "worker never finished"
-    assert not worker.isRunning()
-
-    result = received[0]
-    assert isinstance(result, UpdateCheck)
-    assert result.status == "current"
-
-
-def _wait_until(app, pred, timeout: float) -> bool:
-    import time
-
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        app.processEvents()
-        if pred():
-            return True
-    return False

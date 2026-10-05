@@ -1,8 +1,9 @@
 """Update check: compare the running version against the latest GitHub release.
 
 One manual HTTP request (stdlib urllib — QtNetwork is excluded from the
-bundle); never runs automatically. All network access is injectable so
-tests never leave the machine.
+bundle); never runs automatically. Pure Python (no Qt) so the headless CLI
+can use it too; all network access is injectable so tests never leave the
+machine. The UI thread wrapper lives with the Settings panel.
 """
 
 from __future__ import annotations
@@ -13,8 +14,6 @@ import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-
-from PySide6.QtCore import QThread, Signal
 
 from autodiag import __version__
 
@@ -82,16 +81,3 @@ def check_for_update(
     if newer:
         return UpdateCheck(status="update", latest=tag, url=url)
     return UpdateCheck(status="current", latest=tag, url=url)
-
-
-class UpdateCheckWorker(QThread):
-    """Runs :func:`check_for_update` off the UI thread."""
-
-    done = Signal(object)  # UpdateCheck
-
-    def __init__(self, current: str, parent: Any = None) -> None:
-        super().__init__(parent)
-        self._current = current
-
-    def run(self) -> None:
-        self.done.emit(check_for_update(self._current))

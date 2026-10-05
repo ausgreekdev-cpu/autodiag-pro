@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QGroupBox,
@@ -17,12 +18,25 @@ from PySide6.QtWidgets import (
 
 from autodiag import __version__
 from autodiag.obd.dictionary import load_dictionary
+from autodiag.services import update_check
 from autodiag.services.export import write_report
 from autodiag.services.record import ScanRecord
-from autodiag.services.update_check import UpdateCheck, UpdateCheckWorker
 
 _JSON_FILTER = "JSON report (*.json)"
 _CSV_FILTER = "CSV report (*.csv)"
+
+
+class UpdateCheckWorker(QThread):
+    """Runs check_for_update off the UI thread."""
+
+    done = Signal(object)  # UpdateCheck
+
+    def __init__(self, current: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._current = current
+
+    def run(self) -> None:
+        self.done.emit(update_check.check_for_update(self._current))
 
 
 class SettingsPanel(QWidget):
@@ -116,7 +130,7 @@ class SettingsPanel(QWidget):
 
     def _on_update_done(self, result: object) -> None:
         check = result  # UpdateCheck
-        if not isinstance(check, UpdateCheck):
+        if not isinstance(check, update_check.UpdateCheck):
             return
         if check.status == "update":
             self._update_label.setText(
