@@ -352,7 +352,7 @@ def test_dashboard_filter_survives_reconnect_and_keeps_check_state(qapp):
 def test_main_window_navigation(qapp, tmp_path):
     window = MainWindow(prefs=_fresh_prefs(tmp_path))
     stack = window.findChildren(QStackedWidget)[0]
-    assert stack.count() == 10
+    assert stack.count() == 11
 
     window.show_panel(2)
     assert stack.currentIndex() == 2
@@ -371,8 +371,41 @@ def test_main_window_navigation(qapp, tmp_path):
     assert stack.currentIndex() == 9
     assert _button(window, "PID explorer").isChecked()
 
+    window.show_panel(10)
+    assert stack.currentIndex() == 10
+    assert _button(window, "Overview").isChecked()
+
     window.show_panel(0)
     assert stack.currentIndex() == 0
+    window.close()
+
+
+def test_main_window_lands_on_overview_for_fresh_prefs(qapp, tmp_path):
+    from autodiag.ui.main_window import OVERVIEW_PANEL
+
+    window = MainWindow(prefs=_fresh_prefs(tmp_path))
+    stack = window.findChildren(QStackedWidget)[0]
+    assert stack.currentIndex() == OVERVIEW_PANEL
+    assert _button(window, "Overview").isChecked()
+    window.close()
+
+
+def test_main_window_lands_on_saved_panel(qapp, tmp_path):
+    prefs = _fresh_prefs(tmp_path)
+    prefs.set_panel_index(3)
+    window = MainWindow(prefs=prefs)
+    stack = window.findChildren(QStackedWidget)[0]
+    assert stack.currentIndex() == 3
+    window.close()
+
+
+def test_main_window_quick_actions_navigate(qapp, tmp_path):
+    window = MainWindow(prefs=_fresh_prefs(tmp_path))
+    stack = window.findChildren(QStackedWidget)[0]
+    window._overview._action_buttons[0].click()  # Trouble codes
+    assert stack.currentIndex() == 1
+    window._overview._history_btn.click()
+    assert stack.currentIndex() == 7
     window.close()
 
 

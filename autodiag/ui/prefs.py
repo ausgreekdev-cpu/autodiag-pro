@@ -81,12 +81,16 @@ class Prefs:
 
     # -- layout -----------------------------------------------------------------
 
-    def panel_index(self) -> int:
-        raw = self._s.value("panel_index", 0)
+    def panel_index(self) -> int | None:
+        """Saved panel index; ``None`` when never set (caller picks a default)."""
+        raw = self._s.value("panel_index")
+        if raw is None:
+            return None
         try:
-            return max(int(raw), 0)
+            index = int(raw)
         except (TypeError, ValueError):
-            return 0
+            return None
+        return index if index >= 0 else None
 
     def set_panel_index(self, index: int) -> None:
         self._s.setValue("panel_index", int(index))

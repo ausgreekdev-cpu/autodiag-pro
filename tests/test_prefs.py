@@ -19,7 +19,7 @@ def test_defaults(tmp_path):
     assert prefs.auto_log() is True  # live logging is on out of the box
     assert prefs.poll_interval_ms() == 250
     assert prefs.graph_window() == "2 min"  # dashboard default
-    assert prefs.panel_index() == 0
+    assert prefs.panel_index() is None  # unset → MainWindow lands on Overview
     assert prefs.window_geometry() is None
     assert prefs.window_state() is None
 
@@ -77,7 +77,7 @@ def test_garbage_values_fall_back_to_defaults(tmp_path):
     raw.setValue("auto_connect", "false")
     raw.setValue("graph_window", "bogus")
     assert prefs.poll_interval_ms() == 250
-    assert prefs.panel_index() == 0
+    assert prefs.panel_index() is None
     assert prefs.auto_connect() is False
     assert prefs.graph_window() == "2 min"
 

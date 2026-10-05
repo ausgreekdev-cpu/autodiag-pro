@@ -34,11 +34,16 @@ from autodiag.ui.panels.freeze import FreezeFramePanel
 from autodiag.ui.panels.history import HistoryPanel
 from autodiag.ui.panels.log_viewer import LogViewerPanel
 from autodiag.ui.panels.mode06 import Mode06Panel
+from autodiag.ui.panels.overview import OverviewPanel
 from autodiag.ui.panels.readiness import ReadinessPanel
 from autodiag.ui.panels.settings import SettingsPanel
 from autodiag.ui.panels.trouble_codes import TroubleCodesPanel
 from autodiag.ui.panels.vehicle import VehicleInfoPanel
 from autodiag.ui.prefs import Prefs
+
+# Stack index of the Overview panel — the launch default when the user has no
+# saved panel choice. Must match its position in nav_items (asserted by tests).
+OVERVIEW_PANEL = 10
 
 
 class MainWindow(QMainWindow):
@@ -144,6 +149,10 @@ class MainWindow(QMainWindow):
         self._explorer.graph_pid.connect(
             lambda pid: self._dashboard.set_graphed(pid, True)
         )
+        self._overview = OverviewPanel(
+            self.worker, self.record, self._store, goto=self.show_panel
+        )
+        self._stack.addWidget(self._overview)
 
         nav_items = (
             "Dashboard",
@@ -156,6 +165,7 @@ class MainWindow(QMainWindow):
             "History",
             "Log viewer",
             "PID explorer",
+            "Overview",
         )
         nav = QWidget()
         nav.setFixedWidth(184)
@@ -263,6 +273,8 @@ class MainWindow(QMainWindow):
             self.restoreState(state)
 
         panel = self._prefs.panel_index()
+        if panel is None:
+            panel = OVERVIEW_PANEL  # first run — land on the status overview
         if 0 <= panel < self._stack.count() and panel != self._stack.currentIndex():
             self.show_panel(panel)
 
