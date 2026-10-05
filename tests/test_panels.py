@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QLineEdit, QTableWidget
 
 from autodiag.obd import mode06 as m06
+from autodiag.obd.elm327 import SessionInfo
 from autodiag.obd.mode06 import parse_test_results
 from autodiag.obd.readiness import parse_monitor_status
 from autodiag.services.export import build_report
@@ -22,6 +23,7 @@ from autodiag.ui.panels.freeze import FreezeFramePanel
 from autodiag.ui.panels.history import HistoryPanel
 from autodiag.ui.panels.log_viewer import LogViewerPanel, nearest_sample, status_text
 from autodiag.ui.panels.mode06 import Mode06Panel
+from autodiag.ui.panels.overview import OverviewPanel
 from autodiag.ui.panels.readiness import ReadinessPanel
 from autodiag.ui.panels.settings import SettingsPanel
 from autodiag.ui.panels.trouble_codes import TroubleCodesPanel
@@ -750,3 +752,85 @@ def test_pid_explorer_shows_response_row_and_graph_signal(qapp):
     worker.disconnected.emit("bye")
     assert not panel._request_btn.isEnabled()
     assert "Connect" in panel._hint.text()
+
+
+# -- overview -----------------------------------------------------------------
+
+_INFO = SessionInfo(
+    adapter="ELM327 v1.5",
+    voltage=12.6,
+    protocol="AUTO, ISO 15765-4 (CAN 11/500)",
+    protocol_number="A7",
+)
+
+
+def _overview(tmp_path, worker, goto=None):
+    return OverviewPanel(
+        worker,
+        ScanRecord(),
+        SessionStore(tmp_path),
+        goto if goto is not None else (lambda _index: None),
+    )
+
+
+def test_overview_connection_card(qapp, tmp_path):
+    worker = ObdWorker()
+    panel = _overview(tmp_path, worker)
+    assert panel._conn_state.text() == "Not connected"
+
+    worker.connected.emit(_INFO)
+    assert panel._conn_state.text() == "Connected"
+    assert "ELM327 v1.5" in panel._conn_adapter.text()
+    assert "ISO 15765-4" in panel._conn_protocol.text()
+    assert "12.6 V" in panel._conn_voltage.text()
+
+    worker.voltage.emit(14.2)
+    assert "14.2 V" in panel._conn_voltage.text()
+
+    worker.disconnected.emit("bye")
+    assert panel._conn_state.text() == "Not connected"
+    assert panel._conn_voltage.text() == "Voltage —"
+
+
+def test_overview_vehicle_dtcs_readiness(qapp, tmp_path):
+    worker = ObdWorker()
+    panel = _overview(tmp_path, worker)
+
+    worker.vehicle.emit({"vin": "1D4GP00R56B123457", "cal_ids": [], "cvns": []})
+    assert panel._vin_value.text() == "1D4GP00R56B123457"
+
+    worker.pids_supported.emit({0x05, 0x0C, 0x0D})
+    assert panel._pids_value.text() == "3 parameters supported"
+
+    worker.dtcs.emit("stored", ["P0301"])
+    worker.dtcs.emit("pending", [])
+    assert panel._dtcs_value.text() == "1 stored · 0 pending · 0 permanent"
+    assert "1 code found" in panel._dtcs_note.text()
+
+    status = parse_monitor_status("41 01 86 07 E5 87")
+    worker.monitors.emit(status)
+    assert "MIL on" in panel._mil_value.text()
+    assert panel._ready_value.text() in ("Ready for inspection", "Not ready")
+    assert "monitors complete" in panel._monitors_value.text()
+
+
+def test_overview_last_session_and_quick_actions(qapp, tmp_path):
+    from tests.test_history import _report
+
+    store = SessionStore(tmp_path)
+    store.save(_report(), when=datetime(2026, 10, 3, 12, 30, 45, tzinfo=UTC))
+    goto: list[int] = []
+    worker = ObdWorker()
+    panel = OverviewPanel(worker, ScanRecord(), store, goto.append)
+
+    panel.show()  # offscreen → showEvent → refresh from the store
+    assert "2026-10-03 00:00" in panel._session_value.text()  # report generated_at
+    assert "1D4GP00R56B123457" in panel._session_note.text()
+    assert "1 DTC" in panel._session_note.text()
+
+    for button in panel._action_buttons:
+        button.click()
+    assert goto == [1, 2, 4, 9]
+
+    panel._history_btn.click()
+    assert goto[-1] == 7
