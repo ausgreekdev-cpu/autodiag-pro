@@ -19,6 +19,7 @@ from autodiag import __version__
 from autodiag.obd.dictionary import load_dictionary
 from autodiag.services.export import write_report
 from autodiag.services.record import ScanRecord
+from autodiag.services.update_check import UpdateCheck, UpdateCheckWorker
 
 _JSON_FILTER = "JSON report (*.json)"
 _CSV_FILTER = "CSV report (*.csv)"
@@ -34,6 +35,7 @@ class SettingsPanel(QWidget):
         super().__init__(parent)
         self._record = record
         self._on_message = on_message
+        self._update_worker: UpdateCheckWorker | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 14, 14, 14)
@@ -77,12 +79,57 @@ class SettingsPanel(QWidget):
         )
         dictionary_note.setObjectName("subtle")
         about_layout.addWidget(dictionary_note)
-        privacy_note = QLabel("No data leaves this machine: no accounts, no servers.")
+
+        check_row = QHBoxLayout()
+        self._update_btn = QPushButton("Check for updates")
+        self._update_btn.setToolTip("One request to the GitHub releases API")
+        self._update_btn.clicked.connect(self._on_check_updates)
+        check_row.addWidget(self._update_btn)
+        self._update_label = QLabel("")
+        self._update_label.setObjectName("subtle")
+        self._update_label.setOpenExternalLinks(True)
+        check_row.addWidget(self._update_label, 1)
+        about_layout.addLayout(check_row)
+
+        privacy_note = QLabel(
+            "No data leaves this machine unless you press Check for updates "
+            "(one GitHub API request)."
+        )
         privacy_note.setObjectName("subtle")
         about_layout.addWidget(privacy_note)
         layout.addWidget(about_group)
 
         layout.addStretch(1)
+
+    # -- update check -----------------------------------------------------------
+
+    def _on_check_updates(self) -> None:
+        if self._update_worker is not None:
+            return  # a check is already running
+        self._update_btn.setEnabled(False)
+        self._update_label.setText("Checking…")
+        worker = UpdateCheckWorker(__version__)
+        worker.done.connect(self._on_update_done)
+        worker.finished.connect(self._on_update_finished)
+        self._update_worker = worker  # keep the thread alive until finished
+        worker.start()
+
+    def _on_update_done(self, result: object) -> None:
+        check = result  # UpdateCheck
+        if not isinstance(check, UpdateCheck):
+            return
+        if check.status == "update":
+            self._update_label.setText(
+                f'<a href="{check.url}">{check.latest} is available</a>'
+            )
+        elif check.status == "current":
+            self._update_label.setText(f"You're up to date (v{__version__}).")
+        else:
+            self._update_label.setText(f"Update check failed: {check.message}")
+
+    def _on_update_finished(self) -> None:
+        self._update_worker = None
+        self._update_btn.setEnabled(True)
 
     # -- export -----------------------------------------------------------------
 

@@ -14,6 +14,7 @@ from autodiag.services.export import build_report
 from autodiag.services.history import SessionStore
 from autodiag.services.log_reader import LogData, LogSeries
 from autodiag.services.record import ScanRecord
+from autodiag.services.update_check import UpdateCheck
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.compare_dialog import CompareDialog
 from autodiag.ui.panels.explorer import PidExplorerPanel
@@ -214,6 +215,63 @@ def test_settings_panel_mentions_dictionary_size(qapp):
     panel = SettingsPanel(ScanRecord(), lambda _msg: None)
     notes = [lb.text() for lb in panel.findChildren(QLabel)]
     assert any("codes bundled" in note for note in notes)
+
+
+def _wait_until(app, pred, timeout: float = 5.0) -> bool:
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        app.processEvents()
+        if pred():
+            return True
+    return False
+
+
+def test_settings_check_updates_reports_new_release(qapp, monkeypatch):
+    import autodiag.services.update_check as update_check
+
+    monkeypatch.setattr(
+        update_check,
+        "check_for_update",
+        lambda _current: UpdateCheck(
+            status="update", latest="v9.9.9", url="https://example.test/r"
+        ),
+    )
+    panel = SettingsPanel(ScanRecord(), lambda _msg: None)
+    assert panel._update_btn.isEnabled()
+
+    panel._update_btn.click()
+    assert not panel._update_btn.isEnabled()  # busy while the worker runs
+
+    assert _wait_until(qapp, panel._update_btn.isEnabled), "button never re-enabled"
+    assert "v9.9.9 is available" in panel._update_label.text()
+    assert "https://example.test/r" in panel._update_label.text()
+
+
+def test_settings_check_updates_error_and_current(qapp, monkeypatch):
+    import autodiag.services.update_check as update_check
+
+    panel = SettingsPanel(ScanRecord(), lambda _msg: None)
+
+    monkeypatch.setattr(
+        update_check,
+        "check_for_update",
+        lambda _current: UpdateCheck(status="error", message="HTTP 404"),
+    )
+    panel._update_btn.click()
+    assert _wait_until(qapp, panel._update_btn.isEnabled)
+    assert "failed" in panel._update_label.text()
+    assert "HTTP 404" in panel._update_label.text()
+
+    monkeypatch.setattr(
+        update_check,
+        "check_for_update",
+        lambda _current: UpdateCheck(status="current", latest="v0.11.0"),
+    )
+    panel._update_btn.click()
+    assert _wait_until(qapp, panel._update_btn.isEnabled)
+    assert "up to date" in panel._update_label.text()
 
 
 # -- session history ---------------------------------------------------------------
