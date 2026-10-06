@@ -22,6 +22,10 @@ port (USB cable or paired Bluetooth SPP dongle).
   **and** short-term fuel trim per sensor)... ~40 SAE J1979 PIDs discovered from the
   vehicle (`0100` supported-PID bitmaps), four headline gauges + a scrolling graph of
   any ticked parameters
+- **Threshold alerts** — watch any parameter against a min/max limit while
+  polling: the dashboard cell lights amber on a crossing, the status bar
+  flashes the reading vs. the limit, and every excursion lands in an Alerts
+  event list you can export as CSV (thresholds persist across launches)
 - **Trouble codes** — read stored (`03`), pending (`07`) and permanent (`0A`) DTCs
   with plain-English descriptions (5,112-code bundled dictionary); clear codes (`04`,
   MIL off) with confirmation
@@ -100,6 +104,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 16. Packaging polish (v0.11.0) | done |
 | 17. Update check (v0.12.0) | done |
 | 18. Overview dashboard (v0.13.0) | done |
+| 19. Threshold alerts (v0.14.0) | done |
 
 ## Install & run
 
@@ -157,6 +162,11 @@ autodiag            # or: python -m autodiag
     registry is listed too, marked *unsupported* and gated behind *Force*),
     press *Request* to see the raw response next to the decoded value, and
     *Graph this PID* to tick it in the dashboard graph.
+11. **Alerts** — set a min/max limit on any parameter (before or during a
+    session; supported ones are listed first). Crossings highlight the
+    dashboard value in amber, flash in the status bar and collect here with
+    the time, value and limit; *Export CSV…* saves the history, and the
+    thresholds themselves are remembered between launches.
 
 ## Command-line tools
 
