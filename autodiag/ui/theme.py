@@ -17,6 +17,7 @@ OK = "#3fb950"
 WARN = "#e3b341"
 DANGER = "#f85149"
 SELECTED_ROW = "#1d3a5f"
+BREACH_BG = "#4a3a12"  # amber fill for a value cell that crossed an alert limit
 
 # graph series colors (cycle for selected PIDs)
 SERIES_COLORS = (

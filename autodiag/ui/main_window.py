@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
 )
 
 from autodiag.obd.elm327 import SessionInfo
+from autodiag.obd.pids import PID_REGISTRY, describe_pid
+from autodiag.services.alerts import AlertEvent, AlertLog, Threshold, Watchlist
 from autodiag.services.export import build_report
 from autodiag.services.history import SessionStore, record_has_data
 from autodiag.services.live_log import LiveLog
@@ -28,6 +30,7 @@ from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
 from autodiag.transports.serial_transport import SerialPortInfo, list_serial_ports
 from autodiag.ui.icons import app_icon
+from autodiag.ui.panels.alerts import AlertsPanel
 from autodiag.ui.panels.dashboard import DashboardPanel
 from autodiag.ui.panels.explorer import PidExplorerPanel
 from autodiag.ui.panels.freeze import FreezeFramePanel
@@ -68,6 +71,17 @@ class MainWindow(QMainWindow):
             on_error=lambda msg: self.statusBar().showMessage(msg, 8000),
         )
         self._live_log.set_armed(self._prefs.auto_log())
+
+        # threshold watchlist (persists across launches) + breach event history
+        self._alert_log = AlertLog(
+            Watchlist(
+                {
+                    pid: Threshold(pid, low, high)
+                    for pid, (low, high) in self._prefs.watchlist().items()
+                }
+            ),
+            on_event=self._on_alert_event,
+        )
 
         self.setWindowTitle("AutoDiag Pro")
         self.setWindowIcon(app_icon())
@@ -153,6 +167,9 @@ class MainWindow(QMainWindow):
             self.worker, self.record, self._store, goto=self.show_panel
         )
         self._stack.addWidget(self._overview)
+        self._alerts = AlertsPanel(self.worker, self.record, self._alert_log)
+        self._stack.addWidget(self._alerts)
+        self._alerts.thresholds_changed.connect(self._on_thresholds_changed)
 
         nav_items = (
             "Dashboard",
@@ -166,6 +183,7 @@ class MainWindow(QMainWindow):
             "Log viewer",
             "PID explorer",
             "Overview",
+            "Alerts",
         )
         nav = QWidget()
         nav.setFixedWidth(184)
@@ -222,6 +240,9 @@ class MainWindow(QMainWindow):
         self._dashboard.log_toggled.connect(self._on_log_armed)
         worker.pid_value.connect(self._live_log.add)
 
+        # threshold breaches (same signal; MainWindow fans out to the UI)
+        worker.pid_value.connect(self._alert_log.evaluate)
+
         # history → log viewer jump
         self._history.view_log.connect(self._on_view_log)
 
@@ -240,6 +261,27 @@ class MainWindow(QMainWindow):
 
     def _on_log_change(self, path: Path | None, rows: int) -> None:
         self._dashboard.set_log_status(path.name if path else None, rows)
+
+    # -- alerts -----------------------------------------------------------------
+
+    def _on_alert_event(self, event: AlertEvent) -> None:
+        if event.kind == "breach":
+            definition = PID_REGISTRY.get(event.pid)
+            decimals = definition.decimals if definition else 1
+            self._dashboard.set_breached(event.pid, True)
+            self._alerts.append_event(event)
+            sign = ">" if event.direction == "high" else "<"
+            self.statusBar().showMessage(
+                f"ALERT: {describe_pid(event.pid)} {event.value:.{decimals}f} "
+                f"{sign} {event.limit:.{decimals}f}",
+                8000,
+            )
+        else:
+            self._dashboard.set_breached(event.pid, False)
+
+    def _on_thresholds_changed(self) -> None:
+        self._prefs.set_watchlist(self._alert_log.watchlist.as_dict())
+        self._dashboard.resync_breaches(self._alert_log.watchlist.breaching)
 
     # -- public API --------------------------------------------------------------
 

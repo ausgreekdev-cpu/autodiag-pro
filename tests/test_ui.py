@@ -7,12 +7,14 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QLabel, QPushButton, QStackedWidget
 
 from autodiag.obd.elm327 import SessionInfo
+from autodiag.services.alerts import Threshold
 from autodiag.services.history import SessionStore
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.icons import app_icon
 from autodiag.ui.main_window import MainWindow
 from autodiag.ui.panels.dashboard import DashboardPanel
 from autodiag.ui.prefs import Prefs
+from autodiag.ui.theme import BREACH_BG
 from autodiag.ui.widgets.gauge import Gauge
 from autodiag.ui.widgets.graph import LiveGraph
 
@@ -193,6 +195,34 @@ def test_dashboard_set_graphed_toggles_checkbox(qapp):
     panel.set_graphed(0x99, True)  # unknown pid → no-op
 
 
+def _value_cell(panel: DashboardPanel, pid: int):
+    return panel._table.item(panel._rows[pid], 3)  # _COL_VALUE
+
+
+def test_dashboard_breach_highlight_and_rebuild(qapp):
+    worker = ObdWorker()
+    panel = DashboardPanel(worker)
+    worker.pids_supported.emit({0x0C, 0x0D})
+
+    panel.set_breached(0x0C, True)
+    assert _value_cell(panel, 0x0C).background().color().name() == BREACH_BG
+    assert _value_cell(panel, 0x0D).background().style() == Qt.BrushStyle.NoBrush
+
+    # a table rebuild (reconnect) must restore the highlight
+    worker.pids_supported.emit({0x0C, 0x0D})
+    assert _value_cell(panel, 0x0C).background().color().name() == BREACH_BG
+
+    panel.set_breached(0x0C, False)
+    assert _value_cell(panel, 0x0C).background().style() == Qt.BrushStyle.NoBrush
+
+    panel.set_breached(0x99, True)  # unknown pid → remembered, no crash
+    panel.resync_breaches(frozenset())
+    assert panel._breached == set()
+    panel.set_breached(0x99, True)
+    panel.resync_breaches(frozenset({0x99}))  # kept / re-lit
+    assert panel._breached == {0x99}
+
+
 def test_main_window_explorer_graph_pin(qapp, tmp_path):
     window = MainWindow(prefs=_fresh_prefs(tmp_path))
     window.worker.pids_supported.emit({0x0C, 0x0D})
@@ -352,7 +382,7 @@ def test_dashboard_filter_survives_reconnect_and_keeps_check_state(qapp):
 def test_main_window_navigation(qapp, tmp_path):
     window = MainWindow(prefs=_fresh_prefs(tmp_path))
     stack = window.findChildren(QStackedWidget)[0]
-    assert stack.count() == 11
+    assert stack.count() == 12
 
     window.show_panel(2)
     assert stack.currentIndex() == 2
@@ -375,8 +405,68 @@ def test_main_window_navigation(qapp, tmp_path):
     assert stack.currentIndex() == 10
     assert _button(window, "Overview").isChecked()
 
+    window.show_panel(11)
+    assert stack.currentIndex() == 11
+    assert _button(window, "Alerts").isChecked()
+
     window.show_panel(0)
     assert stack.currentIndex() == 0
+    window.close()
+
+
+def test_main_window_alert_flow(qapp, tmp_path):
+    prefs = _fresh_prefs(tmp_path)
+    window = MainWindow(prefs=prefs)
+    worker = window.worker
+    worker.pids_supported.emit({0x0C, 0x05})
+    window._alert_log.watchlist.set(Threshold(0x0C, high=6000.0))
+
+    # a crossing flags the dashboard, logs an event and flashes the status bar
+    worker.pid_value.emit(0x0C, 6510.0, 1.0)
+    assert 0x0C in window._dashboard._breached
+    assert _value_cell(window._dashboard, 0x0C).background().color().name() == BREACH_BG
+    assert window._alerts._events_table.rowCount() == 1
+    message = window.statusBar().currentMessage()
+    assert message.startswith("ALERT:") and "6510" in message and "6000" in message
+
+    # back inside → highlight clears, but the event stays in the history
+    worker.pid_value.emit(0x0C, 2000.0, 2.0)
+    assert 0x0C not in window._dashboard._breached
+    assert window._alerts._events_table.rowCount() == 1
+    assert len(window._alert_log.events) == 1
+
+    # threshold edits go through the panel and persist to prefs
+    panel = window._alerts
+    panel._pid_combo.setCurrentIndex(panel._pid_combo.findData(0x05))
+    panel._high_chk.setChecked(True)
+    panel._high_spin.setValue(110.0)
+    panel._set_btn.click()
+    assert panel._watchlist.get(0x05) is not None
+    saved = prefs.watchlist()
+    assert saved[0x0C] == (None, 6000.0)
+    assert saved[0x05] == (None, 110.0)
+
+    # removing a threshold while it is breaching drops the highlight
+    worker.pid_value.emit(0x0C, 6500.0, 3.0)
+    assert 0x0C in window._dashboard._breached
+    table = panel._thresholds_table
+    for row in range(table.rowCount()):
+        if int(table.item(row, 0).data(Qt.ItemDataRole.UserRole)) == 0x0C:
+            table.selectRow(row)
+    panel._remove_btn.click()
+    assert panel._watchlist.get(0x0C) is None
+    assert 0x0C not in window._dashboard._breached
+    assert 0x0C not in prefs.watchlist()
+    window.close()
+
+
+def test_main_window_restores_watchlist_from_prefs(qapp, tmp_path):
+    prefs = _fresh_prefs(tmp_path)
+    prefs.set_watchlist({0x0C: (800.0, 6000.0)})
+    window = MainWindow(prefs=prefs)
+    threshold = window._alert_log.watchlist.get(0x0C)
+    assert threshold == Threshold(0x0C, low=800.0, high=6000.0)
+    assert window._alerts._thresholds_table.rowCount() == 1
     window.close()
 
 

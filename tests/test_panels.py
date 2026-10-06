@@ -11,6 +11,7 @@ from autodiag.obd import mode06 as m06
 from autodiag.obd.elm327 import SessionInfo
 from autodiag.obd.mode06 import parse_test_results
 from autodiag.obd.readiness import parse_monitor_status
+from autodiag.services.alerts import AlertLog, Threshold, Watchlist
 from autodiag.services.export import build_report
 from autodiag.services.history import SessionStore
 from autodiag.services.log_reader import LogData, LogSeries
@@ -18,6 +19,7 @@ from autodiag.services.record import ScanRecord
 from autodiag.services.update_check import UpdateCheck
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.compare_dialog import CompareDialog
+from autodiag.ui.panels.alerts import AlertsPanel
 from autodiag.ui.panels.explorer import PidExplorerPanel
 from autodiag.ui.panels.freeze import FreezeFramePanel
 from autodiag.ui.panels.history import HistoryPanel
@@ -834,3 +836,108 @@ def test_overview_last_session_and_quick_actions(qapp, tmp_path):
 
     panel._history_btn.click()
     assert goto[-1] == 7
+
+
+# -- threshold alerts ---------------------------------------------------------
+
+def _alerts_panel():
+    worker = ObdWorker()
+    log = AlertLog(Watchlist())
+    panel = AlertsPanel(worker, ScanRecord(), log)
+    return worker, log, panel
+
+
+def test_alerts_panel_validates_and_edits_thresholds(qapp):
+    _worker, log, panel = _alerts_panel()
+    changed: list[bool] = []
+    panel.thresholds_changed.connect(lambda: changed.append(True))
+
+    # the whole registry is pickable before any connection
+    index = panel._pid_combo.findData(0x0C)
+    assert index >= 0
+    panel._pid_combo.setCurrentIndex(index)
+
+    panel._set_btn.click()  # no bounds ticked
+    assert "Min and/or Max" in panel._hint.text()
+    assert panel._watchlist.get(0x0C) is None
+
+    panel._low_chk.setChecked(True)
+    panel._low_spin.setValue(800.0)
+    panel._high_chk.setChecked(True)
+    panel._high_spin.setValue(600.0)
+    panel._set_btn.click()  # low >= high
+    assert "Min must be below Max" in panel._hint.text()
+    assert panel._watchlist.get(0x0C) is None
+    assert changed == []
+
+    panel._high_spin.setValue(6000.0)
+    panel._set_btn.click()
+    assert panel._watchlist.get(0x0C) == Threshold(0x0C, low=800.0, high=6000.0)
+    assert changed == [True]
+    assert panel._thresholds_table.rowCount() == 1
+    assert panel._thresholds_table.item(0, 0).text() == "0C"
+
+    panel._thresholds_table.selectRow(0)
+    panel._remove_btn.click()
+    assert panel._watchlist.get(0x0C) is None
+    assert panel._thresholds_table.rowCount() == 0
+    assert changed == [True, True]
+
+
+def test_alerts_panel_reorders_combo_when_supported_arrives(qapp):
+    _worker, _log, panel = _alerts_panel()
+    panel.on_pids_supported({0x0C})
+    labels = [
+        panel._pid_combo.itemText(i) for i in range(panel._pid_combo.count())
+    ]
+    assert "Engine RPM" in labels[0] and not labels[0].endswith("(unsupported)")
+    assert any(label.endswith("(unsupported)") for label in labels)
+
+
+def test_alerts_panel_seeds_breach_from_last_recorded_value(qapp):
+    record = ScanRecord()
+    record.record_event("pid_value", (0x0C, 6510.0, 9.0))
+    log = AlertLog(Watchlist())
+    panel = AlertsPanel(ObdWorker(), record, log)
+    panel._pid_combo.setCurrentIndex(panel._pid_combo.findData(0x0C))
+    panel._high_chk.setChecked(True)
+    panel._high_spin.setValue(6000.0)
+    panel._set_btn.click()
+
+    # the stored reading is already outside → flagged without waiting for a poll
+    assert log.watchlist.breaching == frozenset({0x0C})
+    assert len(log.events) == 1
+    assert panel._thresholds_table.rowCount() == 1
+
+
+def test_alerts_panel_clear_and_export_events(qapp, tmp_path, monkeypatch):
+    log = AlertLog(Watchlist({0x0C: Threshold(0x0C, high=6000.0)}))
+    panel = AlertsPanel(ObdWorker(), ScanRecord(), log)
+    log.evaluate(0x0C, 6510.0, 1.0)
+    panel.append_event(log.events[0])
+    assert panel._events_table.rowCount() == 1
+
+    target = tmp_path / "out.csv"
+    monkeypatch.setattr(
+        "autodiag.ui.panels.alerts.QFileDialog.getSaveFileName",
+        lambda *args, **kwargs: (str(target), ""),
+    )
+    panel._export_btn.click()
+    assert target.exists()
+    assert "Written to" in panel._hint.text()
+
+    panel._clear_btn.click()
+    assert panel._events_table.rowCount() == 0
+    assert log.events == []
+
+
+def test_alerts_panel_display_is_capped(qapp):
+    _worker, log, panel = _alerts_panel()
+    from autodiag.services.alerts import MAX_EVENTS
+
+    log.watchlist.set(Threshold(0x0C, high=6000.0))
+    for i in range(MAX_EVENTS + 5):
+        log.evaluate(0x0C, 5000.0, float(i))
+        event = log.evaluate(0x0C, 6500.0 + i, float(i))
+        panel.append_event(event)
+    assert panel._events_table.rowCount() == MAX_EVENTS

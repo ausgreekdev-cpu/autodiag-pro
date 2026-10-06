@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
 from autodiag.obd.pids import PID_REGISTRY, request_pid
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.prefs import GRAPH_WINDOW_CHOICES, Prefs
+from autodiag.ui.theme import BREACH_BG
 from autodiag.ui.widgets.gauge import Gauge
 from autodiag.ui.widgets.graph import LiveGraph
 
@@ -52,6 +54,7 @@ class DashboardPanel(QWidget):
         self._prefs = prefs if prefs is not None else Prefs()
         self._connected = False
         self._rows: dict[int, int] = {}  # pid → table row
+        self._breached: set[int] = set()  # pids over an alert limit (survives rebuilds)
         self._gauge_for_pid: dict[int, Gauge] = {}
 
         self._build_ui()
@@ -253,6 +256,10 @@ class DashboardPanel(QWidget):
 
         self._table.blockSignals(False)
 
+        # restore limit highlights lost with the rebuilt rows
+        for pid in self._breached:
+            self._paint_breach(pid)
+
         # default graph selection: engine speed (when present)
         if 0x0C in self._rows:
             check_item = self._table.item(self._rows[0x0C], _COL_GRAPH)
@@ -306,6 +313,35 @@ class DashboardPanel(QWidget):
         state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
         if item.checkState() != state:
             item.setCheckState(state)  # fires itemChanged → graph rebuild
+
+    def set_breached(self, pid: int, breached: bool) -> None:
+        """Amber-highlight a parameter's value cell while it is over its limit."""
+        if breached:
+            self._breached.add(pid)
+        else:
+            self._breached.discard(pid)
+        self._paint_breach(pid)
+
+    def resync_breaches(self, breaching: frozenset[int]) -> None:
+        """Match highlights to a fresh watchlist snapshot (threshold edits)."""
+        for pid in list(self._breached):
+            if pid not in breaching:
+                self.set_breached(pid, False)
+        for pid in breaching:
+            if pid not in self._breached:
+                self.set_breached(pid, True)
+
+    def _paint_breach(self, pid: int) -> None:
+        row = self._rows.get(pid)
+        if row is None:
+            return
+        item = self._table.item(row, _COL_VALUE)
+        if item is None:
+            return
+        if pid in self._breached:
+            item.setBackground(QColor(BREACH_BG))
+        else:
+            item.setBackground(QBrush())
 
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
         if item.column() != _COL_GRAPH:
