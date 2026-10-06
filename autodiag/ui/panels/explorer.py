@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from autodiag.obd import pids as pid_dec
-from autodiag.obd.pids import PID_REGISTRY, request_pid
+from autodiag.obd.pids import PID_REGISTRY, describe_pid, request_pid
 from autodiag.services.worker import ObdWorker
 
 _MAX_ROWS = 200
@@ -160,11 +160,7 @@ class PidExplorerPanel(QWidget):
 
     @staticmethod
     def _label(pid: int) -> str:
-        definition = PID_REGISTRY.get(pid)
-        name = getattr(definition, "name", None) or f"PID {pid:02X}"
-        unit = getattr(definition, "unit", "")
-        suffix = f" [{unit}]" if unit else ""
-        return f"{request_pid(pid):02X} — {name}{suffix}"
+        return describe_pid(pid)
 
     def _channel_name(self, channel: int) -> str:
         definition = PID_REGISTRY.get(channel)

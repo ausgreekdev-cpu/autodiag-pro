@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from PySide6.QtCore import QByteArray, QSettings
 
 from autodiag.ui.prefs import Prefs
@@ -86,3 +88,28 @@ def test_garbage_values_fall_back_to_defaults(tmp_path):
 
     prefs.set_graph_window("bogus")  # unknown labels are never stored
     assert prefs.graph_window() == "2 min"
+
+
+def test_watchlist_round_trip(tmp_path):
+    prefs = _prefs(tmp_path)
+    assert prefs.watchlist() == {}
+    prefs.set_watchlist({0x0C: (800.0, 6000.0), 0x05: (80.0, None), 0x0D: (None, 200.0)})
+    prefs.sync()
+    fresh = _prefs(tmp_path)
+    assert fresh.watchlist() == {
+        0x0C: (800.0, 6000.0),
+        0x05: (80.0, None),
+        0x0D: (None, 200.0),
+    }
+
+
+def test_watchlist_garbage_falls_back(tmp_path):
+    prefs = _prefs(tmp_path)
+    raw = prefs._s
+    raw.setValue("watchlist", "not json at all")
+    assert prefs.watchlist() == {}
+    raw.setValue("watchlist", json.dumps(["not", "a", "mapping"]))
+    assert prefs.watchlist() == {}
+    # malformed entries drop individually; the good one survives
+    raw.setValue("watchlist", json.dumps({"zz": [1, 2], "0C": ["x", 3], "05": [80, None]}))
+    assert prefs.watchlist() == {0x05: (80.0, None)}

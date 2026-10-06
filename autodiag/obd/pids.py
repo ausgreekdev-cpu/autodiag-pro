@@ -178,6 +178,14 @@ def request_pid(pid: int) -> int:
     return pid - 0x100 if pid in COMPANION_PIDS else pid
 
 
+def describe_pid(pid: int) -> str:
+    """Human label for a parameter: ``0C — Engine RPM [rpm]`` (unit optional)."""
+    definition = PID_REGISTRY.get(pid)
+    name = definition.name if definition else f"PID {pid:02X}"
+    suffix = f" [{definition.unit}]" if definition and definition.unit else ""
+    return f"{request_pid(pid):02X} — {name}{suffix}"
+
+
 def decode_pid(pid: int, data: bytes) -> float | None:
     """Scale raw data bytes for ``pid``; ``None`` if unknown PID or bad length."""
     definition = PID_REGISTRY.get(pid)

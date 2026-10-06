@@ -6,6 +6,8 @@ file and no suite ever touches the user's real configuration.
 
 from __future__ import annotations
 
+import json
+
 from PySide6.QtCore import QByteArray, QSettings
 
 
@@ -106,6 +108,33 @@ class Prefs:
 
     def set_window_state(self, state: QByteArray) -> None:
         self._s.setValue("window/state", state)
+
+    def watchlist(self) -> dict[int, tuple[float | None, float | None]]:
+        """pid → (low, high) alert thresholds; unparsable entries are dropped."""
+        raw = self._s.value("watchlist", "")
+        if not raw:
+            return {}
+        try:
+            data = json.loads(str(raw))
+        except ValueError:
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        result: dict[int, tuple[float | None, float | None]] = {}
+        for key, bounds in data.items():
+            try:
+                pid = int(str(key), 16)
+                low_raw, high_raw = bounds
+                low = float(low_raw) if low_raw is not None else None
+                high = float(high_raw) if high_raw is not None else None
+            except (TypeError, ValueError):
+                continue
+            result[pid] = (low, high)
+        return result
+
+    def set_watchlist(self, thresholds: dict[int, tuple[float | None, float | None]]) -> None:
+        data = {f"{pid:02X}": [low, high] for pid, (low, high) in thresholds.items()}
+        self._s.setValue("watchlist", json.dumps(data))
 
     # -- io ---------------------------------------------------------------------
 
