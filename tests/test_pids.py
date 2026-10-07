@@ -57,7 +57,7 @@ def test_registry_entries_are_sane():
     assert pids.PID_REGISTRY[0x0C].unit == "rpm"
     assert pids.PID_REGISTRY[0x05].unit == "°C"
     for definition in pids.PID_REGISTRY.values():
-        assert 1 <= definition.data_bytes <= 4
+        assert 1 <= definition.data_bytes <= 13
         assert definition.name
 
 
@@ -147,11 +147,50 @@ NEW_PIDS = (
     0xA2,
 )
 
+REMAINING_PIDS = (
+    0x03,
+    0x12,
+    0x13,
+    0x1D,
+    0x1E,
+    *range(0x34, 0x3C),
+    0x4F,
+    0x50,
+    0x5F,
+    0x64,
+    0x65,
+    0x66,
+    0x67,
+    0x68,
+    0x69,
+    0x6B,
+    0x6C,
+    0x6D,
+    0x70,
+    0x72,
+    0x78,
+    0x79,
+    0x7D,
+    0x7E,
+    0x7F,
+    0x84,
+    0x9A,
+    0x9D,
+    0x9E,
+    0x9F,
+    0xA6,
+)
+
 
 def test_full_j1979_registry_coverage():
     assert set(NEW_PIDS) <= set(pids.PID_REGISTRY)
-    assert len(pids.PID_REGISTRY) == 101  # 81 base + 20 companions
+    assert set(REMAINING_PIDS) <= set(pids.PID_REGISTRY)
+    assert len(pids.PID_REGISTRY) == 160  # 119 base + 41 companions
+    assert len(pids._BASE_REGISTRY) == 119
+    assert len(pids.COMPANION_PIDS) == 41
     for pid in NEW_PIDS:
+        assert pids.PID_REGISTRY[pid].name
+    for pid in REMAINING_PIDS:
         assert pids.PID_REGISTRY[pid].name
 
 
@@ -217,3 +256,99 @@ def test_parse_pid_values_wideband_pair():
     values = pids.parse_pid_values("41 24 40 FF 20 00", 0x24)
     assert 0x124 in values
     assert values[0x124] == pytest.approx(1.0)
+
+
+def test_status_pids_decode_raw():
+    assert pids.decode_pid(0x03, bytes.fromhex("0200")) == 2
+    assert pids.decode_pid(0x12, bytes.fromhex("02")) == 2
+    assert pids.decode_pid(0x13, bytes.fromhex("F0")) == 240
+    assert pids.decode_pid(0x1D, bytes.fromhex("05")) == 5
+    assert pids.decode_pid(0x1E, bytes.fromhex("01")) == 1
+    assert pids.decode_pid(0x5F, bytes.fromhex("0B")) == 11
+    assert pids.decode_pid(0x65, bytes.fromhex("800F")) == 32783
+    assert pids.decode_pid(0x7D, bytes.fromhex("01")) == 1
+    assert pids.decode_pid(0x7E, bytes.fromhex("00")) == 0
+
+
+def test_wideband_o2_lambda_and_current_companion():
+    assert pids.decode_pid(0x34, bytes.fromhex("40008180")) == pytest.approx(0.5)
+    values = pids.parse_pid_values("41 34 40 00 81 80", 0x34)
+    assert values[0x34] == pytest.approx(0.5)
+    assert values[0x134] == pytest.approx(1.5)
+    assert pids.request_pid(0x134) == 0x34
+
+
+def test_max_value_pids():
+    assert pids.decode_pid(0x4F, bytes.fromhex("A5")) == 165
+    assert pids.decode_pid(0x50, bytes.fromhex("19")) == 250
+
+
+def test_torque_idle_decodes():
+    assert pids.decode_pid(0x64, bytes.fromhex("7D")) == 0
+    assert pids.decode_pid(0x64, bytes.fromhex("8C")) == 15
+
+
+def test_multi_sensor_pids_first_channel():
+    assert pids.decode_pid(0x66, bytes.fromhex("8104000000")) == pytest.approx(32.0)
+    assert pids.decode_pid(0x67, bytes.fromhex("815000")) == 40
+    assert pids.decode_pid(0x68, bytes.fromhex("816400")) == 60
+    assert pids.decode_pid(0x69, bytes.fromhex("80FF0000000000")) == pytest.approx(100.0)
+    assert pids.decode_pid(0x6B, bytes.fromhex("815A000000")) == 50
+    assert pids.decode_pid(0x6C, bytes.fromhex("80C8000000")) == pytest.approx(78.43, abs=0.01)
+    assert pids.decode_pid(0x6D, bytes.fromhex("8103E80000000000000000")) == 10000
+    assert pids.decode_pid(0x70, bytes.fromhex("81040000000000000000")) == pytest.approx(32.0)
+    assert pids.decode_pid(0x72, bytes.fromhex("80FF000000")) == pytest.approx(100.0)
+
+
+def test_second_channel_companions():
+    values = pids.parse_pid_values("41 66 81 04 00 08 00", 0x66)
+    assert values[0x66] == pytest.approx(32.0)
+    assert values[0x166] == pytest.approx(64.0)
+    values = pids.parse_pid_values("41 67 81 50 64", 0x67)
+    assert values[0x67] == 40
+    assert values[0x167] == 60
+    values = pids.parse_pid_values("41 69 80 C8 64 00 00 00 00", 0x69)
+    assert values[0x69] == pytest.approx(78.43, abs=0.01)
+    assert values[0x169] == pytest.approx(39.22, abs=0.01)
+    values = pids.parse_pid_values("41 6D 81 03 E8 07 D0 00 28 00 00 00 00", 0x6D)
+    assert values[0x6D] == 10000
+    assert values[0x16D] == 20000
+    values = pids.parse_pid_values("41 70 81 04 00 08 00 00 00 00 00", 0x70)
+    assert values[0x70] == pytest.approx(32.0)
+    assert values[0x170] == pytest.approx(64.0)
+    values = pids.parse_pid_values("41 03 01 04", 0x03)
+    assert values[0x03] == 1
+    assert values[0x103] == 4
+
+
+def test_extended_temps_runtime_and_idle_time():
+    assert pids.decode_pid(0x78, bytes.fromhex("810FA000000000000000")) == pytest.approx(360.0)
+    assert pids.decode_pid(0x79, bytes.fromhex("81000000000000000000")) == -40
+    assert pids.decode_pid(0x84, bytes.fromhex("50")) == 40
+    values = pids.parse_pid_values(
+        "41 7F 80 00 00 00 10 00 00 00 20 00 00 00 30", 0x7F
+    )
+    assert values[0x7F] == 16
+    assert values[0x17F] == 32
+
+
+def test_fuel_rates_hybrid_battery_and_odometer():
+    values = pids.parse_pid_values("41 9D 0F A0 03 E8", 0x9D)
+    assert values[0x9D] == 80
+    assert values[0x19D] == 20
+    assert pids.decode_pid(0x9E, bytes.fromhex("03E8")) == 200
+    values = pids.parse_pid_values("41 9A C0 00 80 00 C0 00", 0x9A)
+    assert values[0x9A] == pytest.approx(512.0)
+    assert values[0x19A] == pytest.approx(-1638.4)
+    assert pids.decode_pid(0xA6, bytes.fromhex("000186A0")) == 10000
+
+
+def test_fuel_system_use_percent_companions():
+    values = pids.parse_pid_values("41 9F 80 FF 80 00 00 00 00 00 00", 0x9F)
+    assert values[0x9F] == pytest.approx(100.0)
+    assert values[0x19F] == pytest.approx(50.2, abs=0.01)
+
+
+def test_truncated_new_pids_return_none():
+    for pid in (0x34, 0x66, 0x69, 0x78, 0x7F, 0x9A, 0x9F, 0xA6):
+        assert pids.decode_pid(pid, b"\x01") is None

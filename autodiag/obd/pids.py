@@ -113,6 +113,41 @@ def _u16_div32(d: bytes) -> float:
     return _u16(d) / 32.0
 
 
+def _u16_div64(d: bytes) -> float:
+    return _u16(d) / 64.0
+
+
+def _u16_div50(d: bytes) -> float:
+    return _u16(d) / 50.0
+
+
+def _u16_div5(d: bytes) -> float:
+    return _u16(d) / 5.0
+
+
+def _i16_div10(d: bytes) -> float:
+    return _i16(d) / 10.0
+
+
+def _u32(d: bytes) -> float:
+    return float((d[0] << 24) | (d[1] << 16) | (d[2] << 8) | d[3])
+
+
+def _o2_current(d: bytes) -> float:
+    return ((d[2] << 8) | d[3]) / 256.0 - 128.0
+
+
+def _odo(d: bytes) -> float:
+    return _u32(d) / 10.0
+
+
+def _from(offset: int, fn: Callable[[bytes], float]) -> Callable[[bytes], float]:
+    def scale(data: bytes) -> float:
+        return fn(data[offset:])
+
+    return scale
+
+
 @dataclass(frozen=True)
 class PidDef:
     pid: int
@@ -222,24 +257,86 @@ _DEFS: tuple[PidDef, ...] = (
     _p(0x8D, "Throttle position G", "%", "engine", 1, _pct255),
     _p(0x8E, "Engine friction torque", "%", "engine", 1, _torque, 0),
     _p(0xA2, "Cylinder fuel rate", "mg/stroke", "fuel", 2, _u16_div32, 3),
+    _p(0x03, "Fuel system status", "", "fuel", 2, _u8, 0),
+    _p(0x12, "Commanded secondary air status", "", "emissions", 1, _u8, 0),
+    _p(0x13, "O2 sensors present (2 banks)", "", "o2", 1, _u8, 0),
+    _p(0x1D, "O2 sensors present (4 banks)", "", "o2", 1, _u8, 0),
+    _p(0x1E, "Auxiliary input status", "", "emissions", 1, _u8, 0),
+    _p(0x34, "O2 lambda B1S1 (wide)", "λ", "o2", 4, _eq_ratio, 3),
+    _p(0x35, "O2 lambda B1S2 (wide)", "λ", "o2", 4, _eq_ratio, 3),
+    _p(0x36, "O2 lambda B2S1 (wide)", "λ", "o2", 4, _eq_ratio, 3),
+    _p(0x37, "O2 lambda B2S2 (wide)", "λ", "o2", 4, _eq_ratio, 3),
+    _p(0x38, "O2 lambda B3S1 (wide)", "λ", "o2", 4, _eq_ratio, 3),
+    _p(0x39, "O2 lambda B3S2 (wide)", "λ", "o2", 4, _eq_ratio, 3),
+    _p(0x3A, "O2 lambda B4S1 (wide)", "λ", "o2", 4, _eq_ratio, 3),
+    _p(0x3B, "O2 lambda B4S2 (wide)", "λ", "o2", 4, _eq_ratio, 3),
+    _p(0x4F, "Max equivalence ratio", "", "o2", 4, _u8, 0),
+    _p(0x50, "Max mass air flow", "g/s", "air", 4, lambda d: d[0] * 10.0, 0),
+    _p(0x5F, "Emission requirements", "", "emissions", 1, _u8, 0),
+    _p(0x64, "Engine percent torque (idle)", "%", "engine", 5, _torque, 0),
+    _p(0x65, "Auxiliary input/output supported", "", "engine", 2, _u16, 0),
+    _p(0x66, "Mass air flow sensor A", "g/s", "air", 5, _from(1, _u16_div32), 3),
+    _p(0x67, "Coolant temperature sensor 1", "°C", "temps", 3, _from(1, _temp), 0),
+    _p(0x68, "Intake air temperature sensor 1", "°C", "temps", 3, _from(1, _temp), 0),
+    _p(0x69, "Commanded EGR A", "%", "emissions", 7, _from(1, _pct255)),
+    _p(0x6B, "EGR temperature sensor A", "°C", "temps", 5, _from(1, _temp), 0),
+    _p(0x6C, "Commanded throttle actuator A", "%", "engine", 5, _from(1, _pct255)),
+    _p(0x6D, "Commanded fuel rail pressure A", "kPa", "fuel", 11, _from(1, _rail_x10), 0),
+    _p(0x70, "Commanded boost pressure A", "kPa", "air", 10, _from(1, _u16_div32), 3),
+    _p(0x72, "Commanded wastegate position A", "%", "engine", 5, _from(1, _pct255)),
+    _p(0x78, "Exhaust gas temperature B1S1", "°C", "temps", 9, _from(1, _temp16)),
+    _p(0x79, "Exhaust gas temperature B2S1", "°C", "temps", 9, _from(1, _temp16)),
+    _p(0x7D, "NOx NTE control area status", "", "emissions", 1, _u8, 0),
+    _p(0x7E, "PM NTE control area status", "", "emissions", 1, _u8, 0),
+    _p(0x7F, "Extended engine run time", "s", "engine", 13, _from(1, _u32), 0),
+    _p(0x84, "Manifold surface temperature", "°C", "temps", 1, _temp, 0),
+    _p(0x9A, "Hybrid/EV battery voltage", "V", "electrical", 6, _from(2, _u16_div64), 2),
+    _p(0x9D, "Engine fuel rate (mass)", "g/s", "fuel", 4, _u16_div50, 2),
+    _p(0x9E, "Engine exhaust flow rate", "kg/h", "air", 2, _u16_div5),
+    _p(0x9F, "Fuel system A use (bank 1)", "%", "fuel", 9, _from(1, _pct255)),
+    _p(0xA6, "Odometer", "km", "engine", 4, _odo, 1),
 )
 
-# Intentionally not registered: bit-encoded status PIDs ($12/$13/$1D/$1E/$5F),
-# multi-field "max value" PIDs ($4F/$50), support-bit-gated multi-sensor PIDs
-# ($66-$68, $78/$79), and PIDs without a freely available normative formula
-# ($7A/$7B) — each needs support-bit gating or J1979-DA data to decode safely.
+# Still not registered: PIDs defined only in the paywalled SAE J1979-DA, with
+# no free normative formula ($6A, $6E, $6F, $71, $73-$77, $7A/$7B, $81-$83,
+# $85-$8C, $8F, $90-$94, $98, $99, $9B, $9C, $A1, $A3-$A5, $A7-$A9, $C3-$C8).
 
 _BASE_REGISTRY: dict[int, PidDef] = {d.pid: d for d in _DEFS}
 
 # Companion channels: some responses carry a second measurement in extra bytes
-# (SAE J1979). Synthetic ids $114-$12B / $155-$158 ride along with their base
-# PID's single wire request; see request_pid(). Byte B == $FF marks an O2 trim
-# channel as unused (checked against _o2_stft in parse_pid_values).
+# (SAE J1979). Synthetic ids ride along with their base PID's single wire
+# request; see request_pid(). Byte B == $FF marks an O2 trim channel as unused
+# (checked against _o2_stft in parse_pid_values).
 _SECONDARY_TRIM_COMPANIONS: dict[int, str] = {
     0x55: "ST secondary trim B3",
     0x56: "LT secondary trim B3",
     0x57: "ST secondary trim B4",
     0x58: "LT secondary trim B4",
+}
+
+# base PID -> (name, unit, category, scale, decimals) for extra-byte channels
+_EXTRA_COMPANIONS: dict[int, tuple[str, str, str, Callable[[bytes], float], int]] = {
+    0x03: ("Fuel system status B2", "", "fuel", _from(1, _u8), 0),
+    0x34: ("O2 current B1S1", "mA", "o2", _o2_current, 3),
+    0x35: ("O2 current B1S2", "mA", "o2", _o2_current, 3),
+    0x36: ("O2 current B2S1", "mA", "o2", _o2_current, 3),
+    0x37: ("O2 current B2S2", "mA", "o2", _o2_current, 3),
+    0x38: ("O2 current B3S1", "mA", "o2", _o2_current, 3),
+    0x39: ("O2 current B3S2", "mA", "o2", _o2_current, 3),
+    0x3A: ("O2 current B4S1", "mA", "o2", _o2_current, 3),
+    0x3B: ("O2 current B4S2", "mA", "o2", _o2_current, 3),
+    0x66: ("Mass air flow sensor B", "g/s", "air", _from(3, _u16_div32), 3),
+    0x67: ("Coolant temperature sensor 2", "°C", "temps", _from(2, _temp), 0),
+    0x68: ("Intake air temperature sensor 2", "°C", "temps", _from(2, _temp), 0),
+    0x69: ("Actual EGR A", "%", "emissions", _from(2, _pct255), 1),
+    0x6C: ("Relative throttle position A", "%", "engine", _from(2, _pct255), 1),
+    0x6D: ("Fuel rail pressure A", "kPa", "fuel", _from(3, _rail_x10), 0),
+    0x70: ("Boost pressure A", "kPa", "air", _from(3, _u16_div32), 3),
+    0x72: ("Wastegate position A (actual)", "%", "engine", _from(2, _pct255), 1),
+    0x7F: ("Engine idle time", "s", "engine", _from(5, _u32), 0),
+    0x9A: ("Hybrid/EV battery current", "A", "electrical", _from(4, _i16_div10), 1),
+    0x9D: ("Vehicle fuel rate", "g/s", "fuel", _from(2, _u16_div50), 2),
+    0x9F: ("Fuel system B use (bank 1)", "%", "fuel", _from(2, _pct255), 1),
 }
 
 
@@ -275,6 +372,17 @@ def _build_companions() -> dict[int, PidDef]:
                 data_bytes=2,
                 scale=_trim_second,
                 decimals=1,
+            )
+        elif base in _EXTRA_COMPANIONS:
+            name, unit, category, scale, decimals = _EXTRA_COMPANIONS[base]
+            out[base + 0x100] = PidDef(
+                pid=base + 0x100,
+                name=name,
+                unit=unit,
+                category=category,
+                data_bytes=definition.data_bytes,
+                scale=scale,
+                decimals=decimals,
             )
     return out
 
