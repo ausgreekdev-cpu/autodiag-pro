@@ -56,6 +56,10 @@ class _ScriptedOutput:
         cmd = data.decode("ascii", errors="replace").strip().upper()
         self.writes.append(cmd)
         body = self._responses.get(cmd, UNKNOWN)
+        if body is UNKNOWN and (
+            cmd.startswith("ATSP") or cmd.replace(" ", "").startswith("ATST")
+        ):
+            body = b"\r\r>"  # protocol pin / timeout setters: healthy adapters answer OK
         if cmd == "ATZ":
             out = body  # adapter resets: banner, no echo
         elif self._echo:

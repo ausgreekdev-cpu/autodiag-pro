@@ -6,7 +6,7 @@ import json
 
 from PySide6.QtCore import QByteArray, QSettings
 
-from autodiag.ui.prefs import Prefs
+from autodiag.ui.prefs import PROTOCOL_CHOICES, Prefs
 
 
 def _prefs(tmp_path, name: str = "prefs.ini") -> Prefs:
@@ -22,8 +22,28 @@ def test_defaults(tmp_path):
     assert prefs.poll_interval_ms() == 250
     assert prefs.graph_window() == "2 min"  # dashboard default
     assert prefs.panel_index() is None  # unset → MainWindow lands on Overview
+    assert prefs.protocol() == "0"  # auto-search until the user pins one
     assert prefs.window_geometry() is None
     assert prefs.window_state() is None
+
+
+def test_protocol_pin(tmp_path):
+    prefs = _prefs(tmp_path)
+    prefs.set_protocol("6")
+    assert prefs.protocol() == "6"
+    # survives a second instance (round trip through the INI file)
+    assert _prefs(tmp_path).protocol() == "6"
+    # invalid stored values fall back to auto-search
+    prefs.set_protocol("nope")
+    assert prefs.protocol() == "0"
+    assert _prefs(tmp_path).protocol() == "0"
+
+
+def test_protocol_choices_cover_full_atsp_range():
+    codes = [code for code, _label in PROTOCOL_CHOICES]
+    labels = [label for _code, label in PROTOCOL_CHOICES]
+    assert codes == list("0123456789ABC")  # ELM327 ATSP digits, auto first
+    assert len(set(labels)) == len(labels)  # unique UI labels
 
 
 def test_round_trip_through_second_instance(tmp_path):

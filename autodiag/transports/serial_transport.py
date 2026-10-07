@@ -112,6 +112,7 @@ def connect_elm327(
     session_options: dict[str, float] | None = None,
     on_status: Callable[[str], None] | None = None,
     probe_vehicle: bool = True,
+    protocol: str = "0",
 ) -> Connection:
     """Open ``device``, auto-detect baud rate, run the ELM327 init sequence.
 
@@ -122,6 +123,7 @@ def connect_elm327(
 
     ``probe_vehicle=False`` verifies the adapter alone (no ``0100`` bus
     probe) so callers can smoke-test hardware without a vehicle present.
+    ``protocol`` pins the bus via ``ATSP`` (``"0"`` = auto-search).
     """
     status = on_status if on_status is not None else (lambda _msg: None)
     last_error: Exception | None = None
@@ -133,7 +135,7 @@ def connect_elm327(
             **(session_options or {}),
         )
         try:
-            info = session.initialize(probe_vehicle=probe_vehicle)
+            info = session.initialize(probe_vehicle=probe_vehicle, protocol=protocol)
         except TransportError:
             session.close()
             raise

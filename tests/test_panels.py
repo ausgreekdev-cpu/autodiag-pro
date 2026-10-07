@@ -221,6 +221,32 @@ def test_settings_panel_mentions_dictionary_size(qapp):
     assert any("codes bundled" in note for note in notes)
 
 
+def test_settings_panel_protocol_combo(qapp, tmp_path):
+    from PySide6.QtCore import QSettings
+
+    from autodiag.ui.prefs import PROTOCOL_CHOICES, Prefs
+
+    prefs = Prefs(QSettings(str(tmp_path / "prefs.ini"), QSettings.Format.IniFormat))
+    messages: list[str] = []
+    seen: list[str] = []
+    panel = SettingsPanel(
+        ScanRecord(), messages.append, prefs=prefs, on_protocol=seen.append
+    )
+
+    combo = panel._protocol_combo
+    assert combo.count() == len(PROTOCOL_CHOICES)
+    assert combo.currentData() == "0"  # auto-search out of the box
+
+    combo.setCurrentIndex(6)  # "6" — ISO 15765-4 CAN (11-bit, 500 kbit/s)
+    assert prefs.protocol() == "6"
+    assert seen == ["6"]
+    assert messages and "next connect" in messages[0]
+
+    # a fresh panel restores the pinned protocol from prefs
+    restored = SettingsPanel(ScanRecord(), lambda _m: None, prefs=prefs)
+    assert restored._protocol_combo.currentData() == "6"
+
+
 def _wait_until(app, pred, timeout: float = 5.0) -> bool:
     import time
 

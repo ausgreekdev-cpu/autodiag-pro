@@ -22,6 +22,24 @@ def _as_qbytearray(value: object) -> QByteArray | None:
 GRAPH_WINDOW_DEFAULT = "2 min"
 GRAPH_WINDOW_CHOICES = ("30 s", "2 min", "10 min", "All")
 
+# ELM327 ATSP codes → UI labels ("0" = auto-search on the bus).
+PROTOCOL_CHOICES = (
+    ("0", "Auto (search all)"),
+    ("1", "SAE J1850 PWM (41.6 kbit/s)"),
+    ("2", "SAE J1850 VPW (10.4 kbit/s)"),
+    ("3", "ISO 9141-2 (5-baud init)"),
+    ("4", "ISO 14230-4 KWP (5-baud init)"),
+    ("5", "ISO 14230-4 KWP (fast init)"),
+    ("6", "ISO 15765-4 CAN (11-bit, 500 kbit/s)"),
+    ("7", "ISO 15765-4 CAN (29-bit, 500 kbit/s)"),
+    ("8", "ISO 15765-4 CAN (11-bit, 250 kbit/s)"),
+    ("9", "ISO 15765-4 CAN (29-bit, 250 kbit/s)"),
+    ("A", "SAE J1939 CAN (11-bit, 250 kbit/s)"),
+    ("B", "User 1 CAN (11-bit, 125 kbit/s)"),
+    ("C", "User 2 CAN (11-bit, 50 kbit/s)"),
+)
+_PROTOCOL_CODES = frozenset(code for code, _ in PROTOCOL_CHOICES)
+
 
 class Prefs:
     def __init__(self, settings: QSettings | None = None) -> None:
@@ -56,6 +74,15 @@ class Prefs:
 
     def set_auto_log(self, enabled: bool) -> None:
         self._s.setValue("auto_log", bool(enabled))
+
+    def protocol(self) -> str:
+        """Pinned OBD protocol (``ATSP`` digit); ``"0"`` = auto-search."""
+        raw = str(self._s.value("protocol", "0") or "0").upper()
+        return raw if raw in _PROTOCOL_CODES else "0"
+
+    def set_protocol(self, code: str) -> None:
+        value = str(code).strip().upper()
+        self._s.setValue("protocol", value if value in _PROTOCOL_CODES else "0")
 
     # -- polling --------------------------------------------------------------
 

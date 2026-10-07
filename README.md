@@ -146,8 +146,9 @@ autodiag            # or: python -m autodiag
    read button; results stay available for the report. The freeze-frame panel can
    read any of frames 0–2 and keeps each frame cached for comparison.
 7. **Settings** — export the whole session (VIN, codes, monitors, Mode $06, latest
-   readings) as JSON or CSV, or press *Check for updates* to compare the running
-   version with the latest GitHub release.
+   readings) as JSON or CSV, pin the OBD protocol if auto-detection fails or picks
+   the wrong one, or press *Check for updates* to compare the running version with
+   the latest GitHub release.
 8. **History** — past sessions appear here automatically when you close the app
    (the newest 50 are kept). Select one to preview it, re-export it as JSON/CSV,
    or delete it; the *Log* column shows which sessions have a CSV time series,

@@ -68,6 +68,10 @@ class ObdWorker(QThread):
     def disconnect_from(self) -> None:
         self._engine.submit("disconnect")
 
+    def set_protocol(self, code: str) -> None:
+        """Pin the OBD protocol (``ATSP`` digit, ``"0"`` = auto) for connects."""
+        self._engine.submit("set_protocol", code)
+
     def set_poll(self, pids: set[int] | None = None, interval: float | None = None) -> None:
         self._engine.submit("set_poll", (pids, interval))
 

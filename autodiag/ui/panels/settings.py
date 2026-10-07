@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
@@ -21,6 +22,7 @@ from autodiag.obd.dictionary import load_dictionary
 from autodiag.services import update_check
 from autodiag.services.export import write_report
 from autodiag.services.record import ScanRecord
+from autodiag.ui.prefs import PROTOCOL_CHOICES, Prefs
 
 _JSON_FILTER = "JSON report (*.json)"
 _CSV_FILTER = "CSV report (*.csv)"
@@ -45,10 +47,15 @@ class SettingsPanel(QWidget):
         record: ScanRecord,
         on_message: Callable[[str], None],
         parent: QWidget | None = None,
+        *,
+        prefs: Prefs | None = None,
+        on_protocol: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._record = record
         self._on_message = on_message
+        self._prefs = prefs
+        self._on_protocol = on_protocol
         self._update_worker: UpdateCheckWorker | None = None
 
         layout = QVBoxLayout(self)
@@ -58,6 +65,29 @@ class SettingsPanel(QWidget):
         heading = QLabel("Settings & reports")
         heading.setObjectName("heading")
         layout.addWidget(heading)
+
+        connection_group = QGroupBox("Connection")
+        connection_layout = QVBoxLayout(connection_group)
+        protocol_row = QHBoxLayout()
+        protocol_row.addWidget(QLabel("OBD protocol:"))
+        self._protocol_combo = QComboBox()
+        for code, label in PROTOCOL_CHOICES:
+            self._protocol_combo.addItem(label, code)
+        current = prefs.protocol() if prefs is not None else "0"
+        for index in range(self._protocol_combo.count()):
+            if self._protocol_combo.itemData(index) == current:
+                self._protocol_combo.setCurrentIndex(index)
+                break
+        self._protocol_combo.currentIndexChanged.connect(self._on_protocol_changed)
+        protocol_row.addWidget(self._protocol_combo, 1)
+        connection_layout.addLayout(protocol_row)
+        protocol_hint = QLabel(
+            "Auto-detection usually works; pin the protocol if the adapter "
+            "searches too long or picks the wrong one. Applies on the next connect."
+        )
+        protocol_hint.setObjectName("subtle")
+        connection_layout.addWidget(protocol_hint)
+        layout.addWidget(connection_group)
 
         report_group = QGroupBox("Scan report")
         report_layout = QVBoxLayout(report_group)
@@ -114,6 +144,17 @@ class SettingsPanel(QWidget):
         layout.addWidget(about_group)
 
         layout.addStretch(1)
+
+    # -- connection ------------------------------------------------------------
+
+    def _on_protocol_changed(self, index: int) -> None:
+        code = str(self._protocol_combo.itemData(index) or "0")
+        if self._prefs is not None:
+            self._prefs.set_protocol(code)
+        if self._on_protocol is not None:
+            self._on_protocol(code)
+        label = str(self._protocol_combo.itemText(index))
+        self._on_message(f"Protocol: {label} — applies on the next connect.")
 
     # -- update check -----------------------------------------------------------
 

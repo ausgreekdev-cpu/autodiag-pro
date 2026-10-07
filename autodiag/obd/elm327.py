@@ -33,6 +33,11 @@ ERROR_MESSAGES: dict[str, str] = {
     "timeout": "No response from the adapter.",
 }
 
+# ELM327 ``ATSP`` digits ("0" = auto-search). J1939/user CAN pins use A–C.
+VALID_PROTOCOLS = frozenset("0123456789ABC")
+# Slow K-line protocols: doubled inter-character timeout (`AT ST 64` = 400 ms).
+_KLINE_PROTOCOLS = frozenset("345")
+
 
 class ElmError(Exception):
     """Adapter or vehicle responded with an error; ``kind`` names it."""
@@ -75,17 +80,27 @@ class Elm327Session:
 
     # -- lifecycle ----------------------------------------------------------
 
-    def initialize(self, *, probe_vehicle: bool = True) -> SessionInfo:
+    def initialize(
+        self, *, probe_vehicle: bool = True, protocol: str = "0"
+    ) -> SessionInfo:
         """Open the link, run the AT init sequence, optionally probe the vehicle.
 
         With ``probe_vehicle=False`` the ``0100`` protocol probe and ``ATDP*``
         queries are skipped: the adapter is verified (banner, voltage) without
         needing a vehicle on the bus, and ``protocol`` stays ``None``.
 
+        ``protocol`` pins the bus via ``ATSP`` (see :data:`VALID_PROTOCOLS`);
+        ``"0"`` leaves auto-search on. Pinned K-line protocols 3/4/5 also get
+        a doubled ``AT ST`` inter-character timeout for slow init timing.
+
         Raises :class:`ElmError` / :class:`ElmTimeout`. After a plausible
         ``ATZ`` banner, ``adapter_seen`` is ``True`` — callers should stop
         trying other baud rates and surface the error instead.
         """
+        protocol = protocol.upper()
+        if protocol not in VALID_PROTOCOLS:
+            raise ValueError(f"unknown OBD protocol code: {protocol!r}")
+
         if not self._transport.is_open:
             self._transport.open()
 
@@ -110,24 +125,28 @@ class Elm327Session:
             pass  # some clones dislike ATI; the ATZ banner is good enough
 
         protocol_number: str | None = None
-        protocol: str | None = None
+        protocol_description: str | None = None
         if probe_vehicle:
-            self._transact("ATSP0", self._command_timeout)
-            # Triggers protocol auto-detection; SEARCHING... may take ~10-20 s.
+            self._transact(f"ATSP{protocol}", self._command_timeout)
+            if protocol in _KLINE_PROTOCOLS:
+                self._transact("AT ST 64", self._command_timeout)
+            # ATSP0 makes this trigger auto-detection; SEARCHING... may take ~10-20 s.
             self._transact("0100", self._probe_timeout)
 
             try:
                 protocol_number = (
                     _first_line(self._transact("ATDPN", self._command_timeout)) or None
                 )
-                protocol = _first_line(self._transact("ATDP", self._command_timeout)) or None
+                protocol_description = (
+                    _first_line(self._transact("ATDP", self._command_timeout)) or None
+                )
             except ElmError:
                 pass  # best-effort: not all clones implement ATDP*
 
         return SessionInfo(
             adapter=adapter,
             voltage=voltage,
-            protocol=protocol,
+            protocol=protocol_description,
             protocol_number=protocol_number,
         )
 

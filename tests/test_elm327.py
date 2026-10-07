@@ -45,6 +45,36 @@ def test_initialize_without_vehicle_probe_skips_bus():
     assert transport.writes == ["ATZ", "ATE0", "ATL0", "ATS0", "ATH0", "ATRV", "ATI"]
 
 
+def test_initialize_pins_protocol():
+    session, transport = make_session()
+    info = session.initialize(protocol="6")
+
+    assert transport.writes.index("ATSP6") < transport.writes.index("0100")
+    assert info.protocol is not None  # ATDP still reports the bus description
+
+
+def test_initialize_kline_protocol_raises_intercharacter_timeout():
+    session, transport = make_session()
+    session.initialize(protocol="3")
+
+    writes = transport.writes
+    assert writes.index("ATSP3") < writes.index("AT ST 64") < writes.index("0100")
+
+
+def test_initialize_protocol_code_is_case_insensitive():
+    session, transport = make_session()
+    session.initialize(protocol="a")
+    assert "ATSPA" in transport.writes
+
+
+def test_initialize_rejects_unknown_protocol_before_io():
+    session, transport = make_session()
+    with pytest.raises(ValueError, match="protocol"):
+        session.initialize(protocol="Z")
+    assert transport.writes == []
+    assert not session.adapter_seen
+
+
 def test_command_returns_cleaned_payload():
     session, _transport = make_session()
     session.initialize()

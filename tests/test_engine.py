@@ -577,3 +577,33 @@ def test_request_pid_normalizes_companion_ids():
     writes = holder["transport"].writes
     assert "0115" in writes
     assert not any(cmd.startswith("01115") for cmd in writes)
+
+
+def test_set_protocol_job_pins_and_validates():
+    engine = ObdEngine()
+    engine.submit("set_protocol", "6")
+    assert engine.step(0.0)
+    assert engine._protocol == "6"
+
+    engine.submit("set_protocol", "a")  # normalized to the hex digit
+    assert engine.step(0.0)
+    assert engine._protocol == "A"
+
+    engine.submit("set_protocol", "bogus")  # invalid → back to auto-search
+    assert engine.step(0.0)
+    assert engine._protocol == "0"
+
+
+def test_default_connector_passes_pinned_protocol(monkeypatch):
+    captured: dict = {}
+
+    def fake_connect(device, *, protocol="0", on_status=None):
+        captured.update(device=device, protocol=protocol)
+
+    monkeypatch.setattr("autodiag.services.engine.connect_elm327", fake_connect)
+    engine = ObdEngine()
+    engine.submit("set_protocol", "6")
+    assert engine.step(0.0)
+
+    engine._default_connector("/dev/OBD")
+    assert captured == {"device": "/dev/OBD", "protocol": "6"}

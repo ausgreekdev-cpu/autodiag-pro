@@ -17,7 +17,7 @@ from typing import Any
 from autodiag.obd import dtc as dtc_dec
 from autodiag.obd import framing, freeze_frame, mode06, readiness, vehicle
 from autodiag.obd import pids as pid_dec
-from autodiag.obd.elm327 import ElmError, SessionInfo
+from autodiag.obd.elm327 import VALID_PROTOCOLS, ElmError, SessionInfo
 from autodiag.transports.base import TransportError
 from autodiag.transports.serial_transport import Connection, connect_elm327
 
@@ -52,6 +52,7 @@ class ObdEngine:
         self._info: SessionInfo | None = None
         self._can: bool | None = None
         self._device: str | None = None
+        self._protocol = "0"  # ATSP digit for the next (re)connect; "0" = auto
         self._reconnect_device: str | None = None
         self._reconnect_attempts = 0
         self._reconnect_at = 0.0
@@ -177,6 +178,11 @@ class ObdEngine:
     def _job_disconnect(self, _payload: Any) -> None:
         self._cancel_reconnect()
         self._drop_connection("Disconnected")
+
+    def _job_set_protocol(self, code: Any) -> None:
+        """Pin the OBD protocol for the next (re)connect (``ATSP`` digit)."""
+        text = str(code).strip().upper()
+        self._protocol = text if text in VALID_PROTOCOLS else "0"
 
     def _job_set_poll(self, payload: Any) -> None:
         pids, interval = payload if payload is not None else (None, None)
@@ -442,7 +448,11 @@ class ObdEngine:
         self._emit("disconnected", reason)
 
     def _default_connector(self, device: str) -> Connection:
-        return connect_elm327(device, on_status=lambda msg: self._emit("status", msg))
+        return connect_elm327(
+            device,
+            protocol=self._protocol,
+            on_status=lambda msg: self._emit("status", msg),
+        )
 
     def _emit(self, kind: str, *args: Any) -> None:
         if self._on_event is not None:

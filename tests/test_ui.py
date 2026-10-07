@@ -231,6 +231,27 @@ def test_main_window_explorer_graph_pin(qapp, tmp_path):
     window.close()
 
 
+def test_main_window_pins_protocol_pref_on_worker(qapp, tmp_path):
+    from autodiag.ui.panels.settings import SettingsPanel
+
+    prefs = _fresh_prefs(tmp_path)
+    prefs.set_protocol("6")
+    window = MainWindow(prefs=prefs)
+
+    engine = window.worker._engine
+    while not engine._jobs.empty():  # drain startup jobs (set_poll, set_protocol)
+        assert engine.step(0.0)
+    assert engine._protocol == "6"
+
+    panel = next(
+        widget
+        for widget in (window._stack.widget(i) for i in range(window._stack.count()))
+        if isinstance(widget, SettingsPanel)
+    )
+    assert panel._protocol_combo.currentData() == "6"
+    window.close()
+
+
 def test_app_icon_and_main_window_icon(qapp, tmp_path):
     icon = app_icon()
     assert not icon.pixmap(32, 32).isNull()

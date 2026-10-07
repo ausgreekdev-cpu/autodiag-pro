@@ -152,7 +152,12 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(VehicleInfoPanel(self.worker))
         self._stack.addWidget(Mode06Panel(self.worker))
         self._stack.addWidget(
-            SettingsPanel(self.record, lambda msg: self.statusBar().showMessage(msg, 8000))
+            SettingsPanel(
+                self.record,
+                lambda msg: self.statusBar().showMessage(msg, 8000),
+                prefs=self._prefs,
+                on_protocol=self.worker.set_protocol,
+            )
         )
         self._history = HistoryPanel(self._store)
         self._stack.addWidget(self._history)
@@ -307,6 +312,9 @@ class MainWindow(QMainWindow):
     # -- preferences -------------------------------------------------------------
 
     def _restore_prefs(self) -> None:
+        # queue the pinned OBD protocol before any connect can start
+        self.worker.set_protocol(self._prefs.protocol())
+
         geometry = self._prefs.window_geometry()
         if geometry is not None:
             self.restoreGeometry(geometry)
