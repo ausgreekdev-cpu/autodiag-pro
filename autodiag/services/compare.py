@@ -61,6 +61,20 @@ def compare_reports(baseline: dict, current: dict) -> dict[str, Any]:
         elif was == "FAIL" and is_now == "PASS":
             recovered.append(tests_b[key])
 
+    o2_a = {(t.get("sensor"), t.get("tid")): t for t in baseline.get("mode05") or []}
+    o2_b = {(t.get("sensor"), t.get("tid")): t for t in current.get("mode05") or []}
+    o2_now_failing = []
+    o2_recovered = []
+    for key in o2_b:  # same matched-pair rule as mode06
+        if key not in o2_a:
+            continue
+        was = o2_a[key].get("result")
+        is_now = o2_b[key].get("result")
+        if was == "PASS" and is_now == "FAIL":
+            o2_now_failing.append(o2_b[key])
+        elif was == "FAIL" and is_now == "PASS":
+            o2_recovered.append(o2_b[key])
+
     pids_a = {item.get("pid"): item for item in baseline.get("live_data") or []}
     pids_b = {item.get("pid"): item for item in current.get("live_data") or []}
     deltas = []
@@ -87,6 +101,7 @@ def compare_reports(baseline: dict, current: dict) -> dict[str, Any]:
         "dtcs": {"added": added, "removed": removed},
         "readiness": readiness,
         "mode06": {"now_failing": now_failing, "recovered": recovered},
+        "mode05": {"now_failing": o2_now_failing, "recovered": o2_recovered},
         "live_data": deltas,
     }
 
@@ -102,7 +117,10 @@ def has_changes(diff: dict[str, Any]) -> bool:
     if readiness and (readiness.get("mil") or readiness.get("monitors")):
         return True
     mode06 = diff.get("mode06") or {}
-    return bool(mode06.get("now_failing") or mode06.get("recovered"))
+    if mode06.get("now_failing") or mode06.get("recovered"):
+        return True
+    mode05 = diff.get("mode05") or {}
+    return bool(mode05.get("now_failing") or mode05.get("recovered"))
 
 
 def format_comparison(
@@ -147,6 +165,14 @@ def format_comparison(
         for entry in mode06.get("recovered") or []:
             lines.append(f"  now PASS: {_test_line(entry)}")
 
+    mode05 = diff.get("mode05") or {}
+    if mode05.get("now_failing") or mode05.get("recovered"):
+        lines.append("Mode $05:")
+        for entry in mode05.get("now_failing") or []:
+            lines.append(f"  now FAIL: {_o2_line(entry)}")
+        for entry in mode05.get("recovered") or []:
+            lines.append(f"  now PASS: {_o2_line(entry)}")
+
     # zero-drift rows are noise; has_changes ignores live data entirely
     deltas = [item for item in diff.get("live_data") or [] if item["delta"] != 0.0]
     if deltas:
@@ -175,6 +201,14 @@ def _code_line(entry: dict[str, Any]) -> str:
 def _test_line(entry: dict[str, Any]) -> str:
     return (
         f"MID {entry.get('mid')} TID {entry.get('tid')} — {entry.get('test')} "
+        f"({entry.get('value')} {entry.get('unit')})"
+    )
+
+
+def _o2_line(entry: dict[str, Any]) -> str:
+    sensor = entry.get("sensor_name") or entry.get("sensor") or "?"
+    return (
+        f"{sensor} TID {entry.get('tid')} — {entry.get('test')} "
         f"({entry.get('value')} {entry.get('unit')})"
     )
 

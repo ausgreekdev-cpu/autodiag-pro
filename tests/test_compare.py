@@ -15,6 +15,7 @@ def _report(**overrides) -> dict:
         "dtcs": {},
         "readiness": None,
         "mode06": [],
+        "mode05": [],
         "live_data": [],
     }
     base.update(overrides)
@@ -137,6 +138,52 @@ def test_mode06_transitions():
     assert "now FAIL: MID 01 TID 01" in text
     assert "now PASS: MID 01 TID 02" in text
     assert "Brand new test" not in text  # unmatched new MIDs are ignored
+
+
+def _o2_test(sensor, tid, result, name="Rich-to-lean threshold"):
+    return {
+        "sensor": sensor,
+        "sensor_name": "Bank 1 - Sensor 1",
+        "tid": tid,
+        "test": name,
+        "value": 0.45,
+        "min": 0.1,
+        "max": 0.9,
+        "unit": "V",
+        "result": result,
+    }
+
+
+def test_mode05_transitions():
+    baseline = _report(mode05=[_o2_test("01", 1, "PASS"), _o2_test("01", 5, "FAIL")])
+    current = _report(
+        mode05=[
+            _o2_test("01", 1, "FAIL"),
+            _o2_test("01", 5, "PASS"),
+            _o2_test("02", 1, "FAIL", "Brand new sensor test"),
+        ]
+    )
+    diff = compare_reports(baseline, current)
+    assert [t["tid"] for t in diff["mode05"]["now_failing"]] == [1]
+    assert [t["tid"] for t in diff["mode05"]["recovered"]] == [5]
+    assert has_changes(diff) is True
+
+    text = _format(diff)
+    assert "Mode $05:" in text
+    assert "now FAIL: Bank 1 - Sensor 1 TID 1 — Rich-to-lean threshold" in text
+    assert "now PASS: Bank 1 - Sensor 1 TID 5" in text
+    assert "Brand new sensor test" not in text  # unmatched sensors ignored
+
+
+def test_mode05_not_run_results_never_flip():
+    baseline = _report(mode05=[_o2_test("01", 1, "NOT RUN")])
+    current = _report(
+        mode05=[_o2_test("01", 1, "NOT RUN"), _o2_test("01", 5, "PASS")]
+    )
+    diff = compare_reports(baseline, current)
+    assert diff["mode05"] == {"now_failing": [], "recovered": []}
+    assert has_changes(diff) is False
+    assert "Mode $05:" not in _format(diff)
 
 
 def test_live_data_deltas_with_zero_baseline():
