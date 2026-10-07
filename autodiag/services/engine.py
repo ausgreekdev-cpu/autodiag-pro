@@ -261,7 +261,13 @@ class ObdEngine:
         self._emit("freeze_all", frame, values)
 
     def _job_read_vehicle(self, _payload: Any) -> None:
-        out: dict[str, Any] = {"vin": None, "cal_ids": [], "cvns": []}
+        out: dict[str, Any] = {
+            "vin": None,
+            "cal_ids": [],
+            "cvns": [],
+            "obd_standard": None,
+            "fuel_type": None,
+        }
         for key, cmd, parser in (
             ("vin", "0902", vehicle.parse_vin),
             ("cal_ids", "0904", vehicle.parse_cal_ids),
@@ -271,6 +277,16 @@ class ObdEngine:
                 out[key] = parser(self._req(cmd))
             except ElmError:
                 continue  # some ECUs omit optional info types
+        for key, pid, name in (
+            ("obd_standard", 0x1C, pid_dec.obd_standard_name),
+            ("fuel_type", 0x51, pid_dec.fuel_type_name),
+        ):
+            try:
+                value = pid_dec.parse_pid_value(self._req(f"01{pid:02X}"), pid)
+            except ElmError:
+                continue  # informational PIDs: not reported by every vehicle
+            if value is not None:
+                out[key] = name(value)
         self._emit("vehicle", out)
 
     def _job_read_mode06(self, _payload: Any) -> None:

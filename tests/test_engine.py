@@ -389,6 +389,30 @@ def test_read_vehicle_info():
     assert info["vin"] == "1D4GP00R56B123457"
     assert info["cal_ids"] == ["ECM1A2.34"]
     assert info["cvns"] == ["1B2C3D4E"]
+    # 011C/0151 unscripted → unanswered, reported as absent
+    assert info["obd_standard"] is None
+    assert info["fuel_type"] is None
+
+
+def test_read_vehicle_decodes_obd_standard_and_fuel_type():
+    connector, _holder = scripted_connector(
+        {
+            "0902": b"49 02 01 31 44 34 47 50 30 30 52 35 36 42 31 32 33 34 35 37\r\r>",
+            "011C": b"41 1C 06\r\r>",
+            "0151": b"41 51 04\r\r>",
+        }
+    )
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    engine.submit("read_vehicle")
+    engine.step(0.0)
+
+    info = sink.last("vehicle")[0]
+    assert info["obd_standard"] == "EOBD (Europe)"
+    assert info["fuel_type"] == "Diesel"
 
 
 def test_read_vehicle_tolerates_missing_optional_types():

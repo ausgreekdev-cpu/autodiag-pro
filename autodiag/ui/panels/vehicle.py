@@ -1,10 +1,11 @@
-"""Vehicle info panel: VIN, calibration IDs, CVN (mode $09)."""
+"""Vehicle info panel: VIN, calibration IDs, CVN (mode $09), OBD standard + fuel."""
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
+    QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -73,6 +74,14 @@ class VehicleInfoPanel(QWidget):
         cvn_layout.addWidget(self._cvn_edit)
         layout.addWidget(cvn_group)
 
+        spec_group = QGroupBox("Emissions standard & fuel")
+        spec_layout = QFormLayout(spec_group)
+        self._obd_std_value = QLabel("--")
+        self._fuel_value = QLabel("--")
+        spec_layout.addRow("OBD standard:", self._obd_std_value)
+        spec_layout.addRow("Fuel type:", self._fuel_value)
+        layout.addWidget(spec_group)
+
         layout.addStretch(1)
 
     # -- worker handlers -------------------------------------------------------------
@@ -82,9 +91,13 @@ class VehicleInfoPanel(QWidget):
         self._vin_label.setText(vin if vin else "Not reported by the vehicle")
         self._cal_edit.setText(", ".join(info.get("cal_ids") or []) or "Not reported")
         self._cvn_edit.setText(", ".join(info.get("cvns") or []) or "Not reported")
+        self._obd_std_value.setText(info.get("obd_standard") or "Not reported")
+        self._fuel_value.setText(info.get("fuel_type") or "Not reported")
 
     def _reset(self) -> None:
         self._vin_label.setText("--")
         self._cal_edit.clear()
         self._cvn_edit.clear()
+        self._obd_std_value.setText("--")
+        self._fuel_value.setText("--")
         self._read_btn.setEnabled(False)

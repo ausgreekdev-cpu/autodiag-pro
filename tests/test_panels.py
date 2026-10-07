@@ -123,7 +123,13 @@ def test_vehicle_panel_fills_fields(qapp):
     panel = VehicleInfoPanel(worker)
 
     worker.vehicle.emit(
-        {"vin": "1D4GP00R56B123457", "cal_ids": ["ECM1A2.34"], "cvns": ["1B2C3D4E"]}
+        {
+            "vin": "1D4GP00R56B123457",
+            "cal_ids": ["ECM1A2.34"],
+            "cvns": ["1B2C3D4E"],
+            "obd_standard": "EOBD (Europe)",
+            "fuel_type": "Diesel",
+        }
     )
 
     vin_labels = [
@@ -133,6 +139,21 @@ def test_vehicle_panel_fills_fields(qapp):
     edits = panel.findChildren(QLineEdit)
     assert edits[0].text() == "ECM1A2.34"
     assert edits[1].text() == "1B2C3D4E"
+    assert panel._obd_std_value.text() == "EOBD (Europe)"
+    assert panel._fuel_value.text() == "Diesel"
+
+
+def test_vehicle_panel_standards_default_and_reset(qapp):
+    worker = ObdWorker()
+    panel = VehicleInfoPanel(worker)
+
+    worker.vehicle.emit({"vin": None, "cal_ids": [], "cvns": []})
+    assert panel._obd_std_value.text() == "Not reported"
+    assert panel._fuel_value.text() == "Not reported"
+
+    worker.disconnected.emit("bye")
+    assert panel._obd_std_value.text() == "--"
+    assert panel._fuel_value.text() == "--"
 
 
 def test_mode06_panel_fills_table(qapp):

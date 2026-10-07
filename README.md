@@ -32,7 +32,8 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **Readiness monitors** — I/M status: check emissions readiness before a smog test
 - **Freeze frame** — sensor snapshot captured when a fault was set (`02`), with a
   frame 0/1/2 picker
-- **Vehicle info** — VIN, calibration IDs, CVN (`09`)
+- **Vehicle info** — VIN, calibration IDs, CVN (`09`), plus OBD standard and
+  fuel type (`01 1C`/`01 51`)
 - **Mode $06** — onboard test results (monitor + standardized test name vs. the
   min/max limits the ECU used, PASS/FAIL), with an *Only failures* filter
 - **Reports** — export everything collected to JSON or CSV
