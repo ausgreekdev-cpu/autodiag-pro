@@ -32,7 +32,15 @@ def make_record() -> ScanRecord:
     record.record_event("monitors", (parse_monitor_status("41 01 86 07 E5 87"),))
     record.record_event(
         "vehicle",
-        ({"vin": "1D4GP00R56B123457", "cal_ids": ["ECM1A2.34"], "cvns": ["1B2C3D4E"]},),
+        (
+            {
+                "vin": "1D4GP00R56B123457",
+                "cal_ids": ["ECM1A2.34"],
+                "cvns": ["1B2C3D4E"],
+                "obd_standard": "EOBD (Europe)",
+                "fuel_type": "Diesel",
+            },
+        ),
     )
     record.record_event("freeze_all", (0, {0x0C: 1726.0}))
     record.record_event("freeze_all", (1, {0x05: 83.0}))  # per-frame merge
@@ -48,6 +56,8 @@ def test_build_report_content():
     assert report["adapter"]["voltage"] == 12.6
     assert report["vehicle"]["vin"] == "1D4GP00R56B123457"
     assert report["vehicle"]["calibration_ids"] == ["ECM1A2.34"]
+    assert report["vehicle"]["obd_standard"] == "EOBD (Europe)"
+    assert report["vehicle"]["fuel_type"] == "Diesel"
 
     assert report["readiness"]["mil_on"] is True
     assert report["readiness"]["dtc_count"] == 6
@@ -101,6 +111,10 @@ def test_report_csv_sections():
     )
     assert any(line.startswith("freeze_frame,F0:0C") for line in lines)
     assert any(line.startswith("freeze_frame,F1:05") for line in lines)
+    assert any(
+        line == "vehicle,obd_standard,,EOBD (Europe)" for line in lines
+    )
+    assert any(line == "vehicle,fuel_type,,Diesel" for line in lines)
 
 
 def test_write_report_selects_format_by_suffix(tmp_path):
@@ -117,7 +131,17 @@ def test_record_keeps_vehicle_data_after_disconnect():
     record.record_event("disconnected", ("Adapter unplugged",))
     assert record.session is None
     assert record.vin == "1D4GP00R56B123457"
+    assert record.obd_standard == "EOBD (Europe)"
+    assert record.fuel_type == "Diesel"
     assert record.updated_at is not None
+
+
+def test_record_vehicle_tolerates_missing_standard_keys():
+    record = ScanRecord()
+    record.record_event("vehicle", ({"vin": "1D4GP00R56B123457"},))
+    assert record.vin == "1D4GP00R56B123457"
+    assert record.obd_standard is None
+    assert record.fuel_type is None
 
 
 def test_record_ignores_unrelated_events():

@@ -17,6 +17,8 @@ class ScanRecord:
     vin: str | None = None
     cal_ids: list[str] = field(default_factory=list)
     cvns: list[str] = field(default_factory=list)
+    obd_standard: str | None = None
+    fuel_type: str | None = None
     monitors: MonitorStatus | None = None
     dtcs: dict[str, list[str]] = field(default_factory=dict)  # source → codes
     freeze: dict[int, dict[int, float]] = field(default_factory=dict)  # frame → pid → value
@@ -46,6 +48,8 @@ class ScanRecord:
             self.vin = info.get("vin")
             self.cal_ids = list(info.get("cal_ids") or [])
             self.cvns = list(info.get("cvns") or [])
+            self.obd_standard = info.get("obd_standard")
+            self.fuel_type = info.get("fuel_type")
         elif kind == "freeze_all":
             self.freeze[int(args[0])] = dict(args[1])
         elif kind == "mode06":

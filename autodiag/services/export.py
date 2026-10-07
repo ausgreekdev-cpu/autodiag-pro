@@ -101,6 +101,8 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
             "vin": record.vin,
             "calibration_ids": record.cal_ids,
             "cvn": record.cvns,
+            "obd_standard": record.obd_standard,
+            "fuel_type": record.fuel_type,
         },
         "readiness": readiness,
         "dtcs": dtcs,
@@ -130,6 +132,8 @@ def report_to_csv(report: dict[str, Any]) -> str:
         add("adapter", key, "", report["adapter"][key])
     vehicle = report["vehicle"]
     add("vehicle", "vin", "", vehicle["vin"] or "")
+    add("vehicle", "obd_standard", "", vehicle["obd_standard"] or "")
+    add("vehicle", "fuel_type", "", vehicle["fuel_type"] or "")
     for index, cal in enumerate(vehicle["calibration_ids"]):
         add("vehicle", f"calibration_id[{index}]", "", cal)
     for index, cvn in enumerate(vehicle["cvn"]):
