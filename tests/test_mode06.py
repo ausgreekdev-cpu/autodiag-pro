@@ -73,11 +73,48 @@ def test_fail_outside_limits():
 
 
 def test_signed_scaling():
-    # UASID 0x96: signed ×0.1 −40
-    assert mode06.scale_value(0x96, 200) == pytest.approx(-20.0)
-    assert mode06.scale_value(0x96, 0xFF9C) == pytest.approx(-50.0)  # raw = −100
+    # UASID 0x96: signed ×0.1, no offset (Appendix E Table E64: $FE70 → −40.0 °C)
+    assert mode06.scale_value(0x96, 200) == pytest.approx(20.0)
+    assert mode06.scale_value(0x96, 0xFF9C) == pytest.approx(-10.0)  # raw = −100
+    assert mode06.scale_value(0x96, 0xFE70) == pytest.approx(-40.0)
     # UASID 0x9B not in table → identity fallback
     assert mode06.scale_value(0x9B, 1234) == 1234
+
+
+def test_uasid_table_is_complete():
+    # 65 unsigned ($01–$41) + 27 signed forms = the full standard table
+    assert len(mode06.UASIDS) == 92
+    assert sorted(k for k, v in mode06.UASIDS.items() if not v[3]) == list(range(1, 0x42))
+    signed = sorted(k for k, v in mode06.UASIDS.items() if v[3])
+    assert signed == [
+        0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x8A, 0x8B, 0x8C, 0x8D,
+        0x8E, 0x90, 0x96, 0x99, 0x9C, 0x9D, 0xA8, 0xA9, 0xAD, 0xAE, 0xAF,
+        0xB0, 0xB1, 0xFC, 0xFD, 0xFE,
+    ]
+
+
+def test_new_uasid_scaling():
+    # fixes: $06 is 0.000305 (Table E6: max 19.988), signed $96 has no offset
+    assert mode06.scale_value(0x06, 0xFFFF) == pytest.approx(19.988, abs=0.001)
+    assert mode06.scale_value(0x05, 0xFFFF) == pytest.approx(1.999, abs=0.001)
+    # equivalence-ratio IDs (Tables E30/E51)
+    assert mode06.scale_value(0x1E, 0x8013) == pytest.approx(1.0, abs=1e-4)
+    assert mode06.scale_value(0x33, 0xE5BE) == pytest.approx(14.359, abs=0.001)
+    # EVAP offset percent and time/volume/scaling spot checks
+    assert mode06.scale_value(0x39, 0) == pytest.approx(-327.68)
+    assert mode06.scale_value(0x34, 10) == pytest.approx(10.0)
+    assert mode06.scale_value(0x3F, 10000) == pytest.approx(100.0)
+    assert mode06.scale_value(0x26, 10000) == pytest.approx(1.0)
+    assert mode06.scale_value(0x29, 4096) == pytest.approx(1.024)
+    # signed additions
+    assert mode06.scale_value(0x87, 0xFFFF) == pytest.approx(-1.0)
+    assert mode06.scale_value(0x99, 100) == pytest.approx(10.0)
+    assert mode06.scale_value(0xFC, 0xFFF6) == pytest.approx(-0.1)
+    assert mode06.uasid_unit(0x3C) == "µs"
+    assert mode06.uasid_unit(0x41) == "µA"
+    assert mode06.uasid_unit(0x1E) == "λ"
+    assert mode06.uasid_unit(0x2D) == "mg/stroke"
+    assert mode06.uasid_unit(0x0D) == "mA"
 
 
 def test_parse_supported_mids():
@@ -100,8 +137,21 @@ def test_mid_names():
     assert mode06.mid_name(0xA1) == "Mis-Fire Monitor General Data"
     assert mode06.mid_name(0xA2) == "Mis-Fire Cylinder 1 Data"
     assert mode06.mid_name(0xAD) == "Mis-Fire Cylinder 12 Data"
+    assert mode06.mid_name(0xB1) == "Mis-Fire Cylinder 16 Data"
+    # J1979DA-era monitors (VVT/Boost/NOx/PM)
+    assert mode06.mid_name(0x35) == "VVT Monitor Bank 1"
+    assert mode06.mid_name(0x38) == "VVT Monitor Bank 4"
+    assert mode06.mid_name(0x85) == "Boost Pressure Control Monitor Bank 1"
+    assert mode06.mid_name(0x90) == "NOx Adsorber Monitor Bank 1"
+    assert mode06.mid_name(0x99) == "NOx/SCR Catalyst Monitor Bank 2"
+    assert mode06.mid_name(0xB2) == "Particulate Matter Filter Monitor Bank 1"
     assert "supported" in mode06.mid_name(0x00)
     assert "Reserved" in mode06.mid_name(0x11)
+    assert "Reserved" in mode06.mid_name(0x3E)
+    assert "Reserved" in mode06.mid_name(0x51)
+    assert "Reserved" in mode06.mid_name(0x92)
+    assert "Reserved" in mode06.mid_name(0xB4)
+    assert "Reserved" in mode06.mid_name(0xC1)
     assert "manufacturer" in mode06.mid_name(0xE5).lower()
 
 
