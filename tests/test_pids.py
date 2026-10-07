@@ -106,3 +106,114 @@ def test_parse_pid_values_plain_pid_has_no_companions():
     assert set(values) == {0x0C}
     assert values[0x0C] == pytest.approx(1726)
     assert pids.parse_pid_values("", 0x14) == {}
+
+
+NEW_PIDS = (
+    0x1C,
+    0x22,
+    0x23,
+    *range(0x24, 0x2C),
+    0x2C,
+    0x2D,
+    0x2E,
+    0x30,
+    0x32,
+    0x3E,
+    0x3F,
+    0x48,
+    0x49,
+    0x4A,
+    0x4B,
+    0x4C,
+    0x4D,
+    0x4E,
+    0x51,
+    0x52,
+    0x53,
+    0x54,
+    0x55,
+    0x56,
+    0x57,
+    0x58,
+    0x59,
+    0x5A,
+    0x5B,
+    0x5D,
+    0x61,
+    0x63,
+    0x7C,
+    0x8D,
+    0x8E,
+    0xA2,
+)
+
+
+def test_full_j1979_registry_coverage():
+    assert set(NEW_PIDS) <= set(pids.PID_REGISTRY)
+    assert len(pids.PID_REGISTRY) == 101  # 81 base + 20 companions
+    for pid in NEW_PIDS:
+        assert pids.PID_REGISTRY[pid].name
+
+
+def test_rail_pressure_decodes():
+    assert pids.decode_pid(0x22, bytes.fromhex("03E8")) == pytest.approx(79.0)
+    assert pids.decode_pid(0x23, bytes.fromhex("03E8")) == pytest.approx(10000.0)
+
+
+def test_wideband_o2_lambda_and_voltage():
+    # 0x24: λ = (256A+B)/32768; volts = (256C+D)*8/65536
+    assert pids.decode_pid(0x24, bytes.fromhex("40002000")) == pytest.approx(0.5)
+    volts = pids.PID_REGISTRY[0x124].scale
+    assert volts(bytes.fromhex("40002000")) == pytest.approx(1.0)
+
+
+def test_evaporative_pressure_signed_decodes():
+    assert pids.decode_pid(0x32, bytes.fromhex("FFF4")) == pytest.approx(-3.0)
+    assert pids.decode_pid(0x54, bytes.fromhex("0006")) == pytest.approx(6.0)
+    assert pids.decode_pid(0x53, bytes.fromhex("0FA0")) == pytest.approx(20.0)
+
+
+def test_timing_and_fuel_rate_decodes():
+    assert pids.decode_pid(0x5D, bytes.fromhex("6400")) == pytest.approx(-10.0)
+    assert pids.decode_pid(0xA2, bytes.fromhex("0400")) == pytest.approx(32.0)
+
+
+def test_temperatures_and_torque_style_decodes():
+    assert pids.decode_pid(0x7C, bytes.fromhex("0FA0")) == pytest.approx(360.0)
+    assert pids.decode_pid(0x61, bytes.fromhex("7D")) == pytest.approx(0.0)
+    assert pids.decode_pid(0x8E, bytes.fromhex("8C")) == pytest.approx(15.0)
+
+
+def test_catalyst_bank_naming():
+    assert pids.PID_REGISTRY[0x3D].name == "Catalyst temperature B2S1"
+    assert pids.PID_REGISTRY[0x3E].name == "Catalyst temperature B1S2"
+
+
+def test_obd_standard_and_fuel_type_enums():
+    assert pids.obd_standard_name(6) == "EOBD (Europe)"
+    assert pids.obd_standard_name(7) == "EOBD and OBD-II"
+    assert pids.obd_standard_name(34) == "OBD, OBD-II, and HD OBD"
+    assert pids.obd_standard_name(99) == "OBD standard 99"
+    assert pids.fuel_type_name(4) == "Diesel"
+    assert pids.fuel_type_name(23) == "Bifuel (Diesel)"
+    assert pids.fuel_type_name(40) == "Fuel type 40"
+    assert pids.decode_pid(0x1C, bytes.fromhex("06")) == 6
+    assert pids.decode_pid(0x51, bytes.fromhex("04")) == 4
+
+
+def test_secondary_trim_companions():
+    assert pids.request_pid(0x155) == 0x55
+    assert pids.request_pid(0x158) == 0x58
+    values = pids.parse_pid_values("41 55 80 C0", 0x55)
+    assert values[0x55] == pytest.approx(0.0, abs=0.01)
+    assert values[0x155] == pytest.approx(50.0)  # 0xC0/1.28 - 100
+
+
+def test_parse_pid_values_wideband_pair():
+    values = pids.parse_pid_values("41 24 40 00 20 00", 0x24)
+    assert values[0x24] == pytest.approx(0.5)
+    assert values[0x124] == pytest.approx(1.0)
+    # FF in the λ low byte must not drop the companion (sentinel is STFT-only)
+    values = pids.parse_pid_values("41 24 40 FF 20 00", 0x24)
+    assert 0x124 in values
+    assert values[0x124] == pytest.approx(1.0)
