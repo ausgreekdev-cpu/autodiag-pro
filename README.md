@@ -109,6 +109,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 18. Overview dashboard (v0.13.0) | done |
 | 19. Threshold alerts (v0.14.0) | done |
 | 20. Euro-complete generic layer + protocol pinning (v0.15.0) | done |
+| 21. Mode $05 O2 monitor tests (v0.16.0) | done |
 
 ## Install & run
 
