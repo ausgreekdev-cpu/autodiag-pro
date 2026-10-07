@@ -15,7 +15,7 @@ from collections.abc import Callable
 from typing import Any
 
 from autodiag.obd import dtc as dtc_dec
-from autodiag.obd import framing, freeze_frame, mode06, readiness, vehicle
+from autodiag.obd import framing, freeze_frame, mode05, mode06, readiness, vehicle
 from autodiag.obd import pids as pid_dec
 from autodiag.obd.elm327 import VALID_PROTOCOLS, ElmError, SessionInfo
 from autodiag.transports.base import TransportError
@@ -30,6 +30,8 @@ _MAX_PID_FAILURES = 3  # consecutive ElmErrors before a PID is dropped
 _RECONNECT_BACKOFF = (1.0, 2.0, 4.0, 8.0, 15.0)  # seconds before each retry
 
 _CAN_PROTOCOLS = {"6", "7", "8", "9"}  # ATDPN digits for ISO 15765-4
+# ATDPN digits for any CAN-based bus — service $05 is non-CAN only (§6.5).
+_MODE05_UNSUPPORTED = frozenset("6789ABCDEF")
 
 
 class ObdEngine:
@@ -312,6 +314,81 @@ class ObdEngine:
             except ElmError:
                 continue
         self._emit("mode06", results)
+
+    def _job_read_mode05(self, _payload: Any) -> None:
+        results: list[mode05.TestResult] = []
+        if self._bus_is_can():
+            self._emit("status", "Service $05 is non-CAN only — see Mode $06")
+            self._emit("mode05", results)
+            return
+        sensors, via_pid_1d = self._discover_o2_sensors()
+        for sensor in sensors:
+            for tid in self._mode05_tids(sensor):
+                try:
+                    text = self._req(f"05{tid:02X}{sensor:02X}")
+                except ElmError:
+                    continue  # test not reported for this sensor/ECU
+                results.extend(
+                    mode05.parse_tid_values(text, tid, sensor, via_pid_1d=via_pid_1d)
+                )
+        if not results:
+            self._emit("status", "No oxygen-sensor test results reported")
+        self._emit("mode05", results)
+
+    def _bus_is_can(self) -> bool:
+        """Whether ATDPN reports a CAN bus (service $05 is non-CAN only).
+
+        Unknown/absent protocol numbers return ``False``: probe and let
+        ``NO DATA`` decide, so adapters that omit ATDPN still work.
+        """
+        info_number = self._info.protocol_number if self._info else None
+        code = (info_number or "").strip().upper().lstrip("A")[:1]
+        return bool(code) and code in _MODE05_UNSUPPORTED
+
+    def _read_location_byte(self, pid: int) -> int | None:
+        """Byte A of PID $13 / $1D (O2 sensor location bitmask), or None."""
+        try:
+            text = self._req(f"01{pid:02X}")
+        except ElmError:
+            return None
+        payload = framing.extract_payload(text, f"41{pid:02X}")
+        if not payload or len(payload) < 2:
+            return None
+        try:
+            return framing.hex_to_bytes(payload[:2])[0]
+        except ValueError:
+            return None
+
+    def _discover_o2_sensors(self) -> tuple[list[int], bool]:
+        """O2SNO masks + which layout applies (J1979: PID $13 xor $1D)."""
+        for pid in (0x13, 0x1D):
+            location = self._read_location_byte(pid)
+            if location:
+                via_pid_1d = pid == 0x1D
+                return (
+                    mode05.sensor_masks(location, via_pid_1d=via_pid_1d),
+                    via_pid_1d,
+                )
+        # Neither PID answered: probe the four primary masks (PID $13 labels).
+        return mode05.sensor_masks(0x0F), False
+
+    def _mode05_tids(self, sensor: int) -> list[int]:
+        """Supported Test IDs for ``sensor`` via the §5.5.1 bitmap walk."""
+        tids: set[int] = set()
+        base = 0x00
+        while base <= 0xE0:
+            try:
+                text = self._req(f"05{base:02X}{sensor:02X}")
+            except ElmError:
+                # Feature unused by this ECU (§5.5.1): probe the
+                # standardized Appendix C set instead.
+                return list(mode05.STANDARD_TIDS)
+            sup, nxt = mode05.parse_supported_tids(text, base, sensor)
+            tids |= sup
+            if not nxt:
+                break
+            base += 0x20
+        return sorted(tids)
 
     def _job_read_voltage(self, _payload: Any) -> None:
         self._emit("voltage", self._read_voltage())

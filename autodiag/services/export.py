@@ -74,6 +74,22 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
             }
         )
 
+    mode05 = []
+    for result in record.mode05:
+        mode05.append(
+            {
+                "tid": f"{result.tid:02X}",
+                "sensor": f"{result.sensor:02X}",
+                "sensor_name": result.sensor_label,
+                "test": result.test_name,
+                "value": result.value,
+                "min": result.min_value,
+                "max": result.max_value,
+                "unit": result.unit,
+                "result": _pass_label(result.passed),
+            }
+        )
+
     pids = []
     for pid, (value, _timestamp) in sorted(record.pids.items()):
         definition = PID_REGISTRY.get(pid)
@@ -108,6 +124,7 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
         "dtcs": dtcs,
         "freeze_frame": freeze,
         "mode06": mode06,
+        "mode05": mode05,
         "live_data": pids,
     }
     if record.log_file:
@@ -168,6 +185,17 @@ def report_to_csv(report: dict[str, Any]) -> str:
             f"[{item['min']} … {item['max']}] {item['result']}"
         )
         add("mode06", f"{item['mid']}-{item['tid']}", item["monitor"], detail)
+
+    for item in report["mode05"]:
+        detail = f"{item['test']}: {item['value']} {item['unit']}".rstrip()
+        if item["min"] is not None and item["max"] is not None:
+            detail += f" [{item['min']} … {item['max']}]"
+        add(
+            "mode05",
+            f"{item['sensor']}-{item['tid']}",
+            item["sensor_name"],
+            f"{detail} {item['result']}",
+        )
 
     for item in report["live_data"]:
         add("live_data", item["pid"], item["name"], f"{item['value']} {item['unit']}")

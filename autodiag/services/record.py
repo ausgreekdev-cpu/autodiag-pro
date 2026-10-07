@@ -23,6 +23,7 @@ class ScanRecord:
     dtcs: dict[str, list[str]] = field(default_factory=dict)  # source → codes
     freeze: dict[int, dict[int, float]] = field(default_factory=dict)  # frame → pid → value
     mode06: list[object] = field(default_factory=list)  # mode06.TestResult
+    mode05: list[object] = field(default_factory=list)  # mode05.TestResult
     pids: dict[int, tuple[float, float]] = field(default_factory=dict)  # pid → (v, t)
     updated_at: datetime | None = None
     log_file: str | None = None  # live-log basename (set at close, if logging)
@@ -54,6 +55,8 @@ class ScanRecord:
             self.freeze[int(args[0])] = dict(args[1])
         elif kind == "mode06":
             self.mode06 = list(args[0])
+        elif kind == "mode05":
+            self.mode05 = list(args[0])
         else:
             return
         self.updated_at = now

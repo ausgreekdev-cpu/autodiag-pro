@@ -35,6 +35,10 @@ from autodiag.obd import framing
 # (TABLE 58: "if the supported Test ID is a constant ($01 - $04) ...").
 CONSTANT_TIDS = frozenset({0x01, 0x02, 0x03, 0x04})
 
+# Standardized Test IDs (Appendix C): fallback probe set when the ECU
+# does not implement the optional supported-TID bitmap (§5.5.1).
+STANDARD_TIDS: tuple[int, ...] = tuple(range(0x01, 0x0B))
+
 # Standardized Test IDs (Appendix C TABLE C1).
 TID_NAMES: dict[int, str] = {
     0x01: "Rich-to-lean sensor threshold voltage (constant)",

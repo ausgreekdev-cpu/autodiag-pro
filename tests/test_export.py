@@ -6,6 +6,7 @@ import json
 from datetime import UTC, datetime
 
 from autodiag.obd.elm327 import SessionInfo
+from autodiag.obd.mode05 import parse_tid_values
 from autodiag.obd.mode06 import parse_test_results
 from autodiag.obd.readiness import parse_monitor_status
 from autodiag.services.export import build_report, report_to_csv, report_to_json, write_report
@@ -45,6 +46,9 @@ def make_record() -> ScanRecord:
     record.record_event("freeze_all", (0, {0x0C: 1726.0}))
     record.record_event("freeze_all", (1, {0x05: 83.0}))  # per-frame merge
     record.record_event("mode06", (parse_test_results("46 01 01 0A 06 60 06 60 06 60"),))
+    record.record_event(
+        "mode05", (parse_tid_values("45 05 01 12 00 19", 0x05, 0x01),)
+    )
     return record
 
 
@@ -75,6 +79,11 @@ def test_build_report_content():
         report["mode06"][0]["test"]
         == "Rich-to-lean sensor threshold voltage (constant)"
     )
+    assert report["mode05"][0]["tid"] == "05"
+    assert report["mode05"][0]["sensor"] == "01"
+    assert report["mode05"][0]["sensor_name"] == "Bank 1 - Sensor 1"
+    assert round(report["mode05"][0]["value"], 3) == 0.072
+    assert report["mode05"][0]["result"] == "PASS"
     assert report["live_data"][0]["pid"] == "0C"
     assert report["live_data"][0]["value"] == 1726.0
 
@@ -106,6 +115,7 @@ def test_report_csv_sections():
     assert any(line.startswith("live_data,0C") for line in lines)
     assert any(line.startswith("readiness,mil_on") for line in lines)
     assert any(line.startswith("mode06,01-01") for line in lines)
+    assert any(line.startswith("mode05,01-05,") for line in lines)
     assert any(
         "Rich-to-lean sensor threshold voltage" in line for line in lines
     )

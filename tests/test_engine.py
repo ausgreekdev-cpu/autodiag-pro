@@ -456,6 +456,108 @@ def test_read_mode06():
     assert results[0].passed is True
 
 
+def _connect(engine: ObdEngine) -> None:
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+
+def test_read_mode05_spec_flow_pid13_layout():
+    connector, holder = scripted_connector(
+        {
+            "0113": b"41 13 01\r\r>",
+            "050001": b"45 00 01 FC 00 00 00\r\r>",
+            "050101": b"45 01 01 5A\r\r>",
+            "050501": b"45 05 01 12 00 19\r\r>",
+        }
+    )
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    _connect(engine)
+
+    engine.submit("read_mode05")
+    engine.step(0.0)
+
+    results = sink.last("mode05")[0]
+    assert [(r.tid, r.sensor) for r in results] == [(0x01, 0x01), (0x05, 0x01)]
+    assert results[0].value == pytest.approx(0.45)
+    assert results[1].value == pytest.approx(0.072)
+    assert results[1].max_value == pytest.approx(0.1)
+    assert all(r.sensor_label == "Bank 1 - Sensor 1" for r in results)
+    writes = holder["transport"].writes
+    assert "050001" in writes  # supported-TID bitmap
+    assert "050501" in writes
+    # TIDs $02-$04/$06 are in the bitmap but unscripted → no data, skipped
+    assert "050701" not in writes  # beyond the reported bitmap
+
+
+def test_read_mode05_pid1d_location_labels():
+    connector, _holder = scripted_connector(
+        {
+            "011D": b"41 1D 04\r\r>",  # bit 2 = Bank 2 - Sensor 1 ($1D)
+            "050004": b"45 00 04 FC 00 00 00\r\r>",
+            "050104": b"45 01 04 5A\r\r>",
+        }
+    )
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    _connect(engine)
+
+    engine.submit("read_mode05")
+    engine.step(0.0)
+
+    results = sink.last("mode05")[0]
+    assert len(results) == 1
+    assert results[0].sensor == 0x04
+    assert results[0].sensor_label == "Bank 2 - Sensor 1"
+    assert results[0].via_pid_1d is True
+
+
+def test_read_mode05_fallback_probes_standard_tids():
+    connector, holder = scripted_connector(
+        {"050101": b"45 01 01 5A\r\r>"}  # no $13/$1D, no bitmap support
+    )
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    _connect(engine)
+
+    engine.submit("read_mode05")
+    engine.step(0.0)
+
+    results = sink.last("mode05")[0]
+    assert len(results) == 1
+    assert results[0].tid == 0x01
+    writes = holder["transport"].writes
+    assert "050001" in writes  # bitmap probed, then standard-set fallback
+    assert "050A08" in writes  # last sensor × last standardized TID ($0A)
+
+
+def test_read_mode05_skips_on_can_buses():
+    connector, holder = scripted_connector({"ATDPN": b"A6\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    _connect(engine)
+
+    engine.submit("read_mode05")
+    engine.step(0.0)
+
+    assert sink.last("mode05")[0] == []
+    assert any("Mode $06" in args[0] for args in sink.of("status"))
+    assert not [w for w in holder["transport"].writes if w.startswith("05")]
+
+
+def test_read_mode05_reports_empty_when_nothing_returned():
+    connector, _holder = scripted_connector()  # all mode05 requests fail
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    _connect(engine)
+
+    engine.submit("read_mode05")
+    engine.step(0.0)
+
+    assert sink.last("mode05")[0] == []
+    assert any("No oxygen-sensor" in args[0] for args in sink.of("status"))
+
+
 def test_transport_failure_drops_connection():
     connector, holder = scripted_connector()
     sink = Recorder()

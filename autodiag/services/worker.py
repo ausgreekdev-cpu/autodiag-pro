@@ -31,6 +31,7 @@ class ObdWorker(QThread):
     freeze_all = Signal(int, object)  # frame, dict[pid → value]
     vehicle = Signal(object)  # {"vin", "cal_ids", "cvns"}
     mids_supported = Signal(object)  # set[int]
+    mode05 = Signal(object)  # list[mode05.TestResult]
     mode06 = Signal(object)  # list[TestResult]
     voltage = Signal(float)
     reconnecting = Signal(int, int)  # (attempt about to run, max); (0, 0) = gave up
@@ -51,6 +52,7 @@ class ObdWorker(QThread):
         "freeze_all",
         "vehicle",
         "mids_supported",
+        "mode05",
         "mode06",
         "voltage",
         "reconnecting",
@@ -95,6 +97,9 @@ class ObdWorker(QThread):
 
     def read_vehicle(self) -> None:
         self._engine.submit("read_vehicle")
+
+    def read_mode05(self) -> None:
+        self._engine.submit("read_mode05")
 
     def read_mode06(self) -> None:
         self._engine.submit("read_mode06")

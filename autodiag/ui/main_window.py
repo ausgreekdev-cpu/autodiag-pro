@@ -240,6 +240,7 @@ class MainWindow(QMainWindow):
             lambda frame, values: record("freeze_all", (frame, values))
         )
         worker.mode06.connect(lambda results: record("mode06", (results,)))
+        worker.mode05.connect(lambda results: record("mode05", (results,)))
 
         # time-series CSV logger (feeds itself from the same signal)
         self._dashboard.log_toggled.connect(self._on_log_armed)
