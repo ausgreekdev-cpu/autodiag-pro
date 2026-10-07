@@ -27,7 +27,7 @@ port (USB cable or paired Bluetooth SPP dongle).
   flashes the reading vs. the limit, and every excursion lands in an Alerts
   event list you can export as CSV (thresholds persist across launches)
 - **Trouble codes** — read stored (`03`), pending (`07`) and permanent (`0A`) DTCs
-  with plain-English descriptions (5,112-code bundled dictionary); clear codes (`04`,
+  with plain-English descriptions (10,497-code bundled dictionary); clear codes (`04`,
   MIL off) with confirmation
 - **Readiness monitors** — I/M status: check emissions readiness before a smog test
 - **Freeze frame** — sensor snapshot captured when a fault was set (`02`), with a
@@ -269,5 +269,10 @@ Everything speaks SAE J1979 (modes $01–$0A) — no cloud services anywhere.
 
 ## License
 
-See repository for license details. The bundled DTC dictionary originates from an
-Apache-2.0 npm package — see `autodiag/data/LICENSE-dtc-data.txt`.
+See repository for license details. The bundled DTC dictionary (10,497 codes)
+originates from an Apache-2.0 npm package — see
+`autodiag/data/LICENSE-dtc-data.txt` — and was audited and gap-filled against
+two open SAE J2012 transcriptions: OBDex (CC0-1.0) supplied added
+descriptions, and Wal33D/dtc-database (MIT) was used to verify code existence
+plus 129 body/chassis additions. Placeholder entries ("Manufacturer
+Controlled DTC") were deliberately not imported.

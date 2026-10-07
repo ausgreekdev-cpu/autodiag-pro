@@ -1,4 +1,4 @@
-"""Bundled DTC description lookup (5,112 codes, Apache-2.0 — see LICENSE-dtc-data.txt)."""
+"""Bundled DTC description lookup (10,497 codes — see README §License and LICENSE-dtc-data.txt)."""
 
 from __future__ import annotations
 
