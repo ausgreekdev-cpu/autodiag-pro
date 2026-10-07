@@ -7,8 +7,10 @@ from datetime import UTC, datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QLineEdit, QTableWidget
 
+from autodiag.obd import mode05 as m05
 from autodiag.obd import mode06 as m06
 from autodiag.obd.elm327 import SessionInfo
+from autodiag.obd.mode05 import parse_tid_values
 from autodiag.obd.mode06 import parse_test_results
 from autodiag.obd.readiness import parse_monitor_status
 from autodiag.services.alerts import AlertLog, Threshold, Watchlist
@@ -24,6 +26,7 @@ from autodiag.ui.panels.explorer import PidExplorerPanel
 from autodiag.ui.panels.freeze import FreezeFramePanel
 from autodiag.ui.panels.history import HistoryPanel
 from autodiag.ui.panels.log_viewer import LogViewerPanel, nearest_sample, status_text
+from autodiag.ui.panels.mode05 import Mode05Panel
 from autodiag.ui.panels.mode06 import Mode06Panel
 from autodiag.ui.panels.overview import OverviewPanel
 from autodiag.ui.panels.readiness import ReadinessPanel
@@ -216,6 +219,78 @@ def test_mode06_panel_failures_only_filter(qapp):
 
     worker.disconnected.emit("bye")  # results dropped with the session
     assert table.rowCount() == 0
+    assert panel._count_label.text() == ""
+
+
+def test_mode05_panel_fills_table(qapp):
+    worker = ObdWorker()
+    panel = Mode05Panel(worker)
+
+    worker.mode05.emit(parse_tid_values("45 01 01 5A", 0x01, 0x01))
+
+    table = panel.findChildren(QTableWidget)[0]
+    assert table.rowCount() == 1
+    assert table.item(0, 0).text() == "Bank 1 - Sensor 1"
+    assert table.item(0, 1).text() == (
+        "Rich-to-lean sensor threshold voltage (constant)"
+    )
+    assert table.item(0, 2).text() == "0.45"
+    assert table.item(0, 3).text() == "—"  # constants publish no limits
+    assert table.item(0, 5).text() == "V"
+    assert table.item(0, 6).text() == "NOT RUN"
+    assert panel._count_label.text() == "1 test(s)"
+    assert "no limits" in panel._hint.text()
+
+
+def _mode05_result(value: float, low: float, high: float) -> m05.TestResult:
+    return m05.TestResult(
+        tid=0x05,
+        sensor=0x01,
+        raw_value=1,
+        raw_min=0,
+        raw_max=2,
+        value=value,
+        min_value=low,
+        max_value=high,
+        unit="s",
+    )
+
+
+def test_mode05_panel_failures_only_filter(qapp):
+    worker = ObdWorker()
+    panel = Mode05Panel(worker)
+    results = [
+        _mode05_result(1.0, 0.0, 2.0),  # PASS
+        _mode05_result(9.0, 0.0, 2.0),  # FAIL
+        m05.TestResult(  # NOT RUN: all raw bytes zero
+            tid=0x05, sensor=0x01,
+            raw_value=0, raw_min=0, raw_max=0,
+            value=0.0, min_value=0.0, max_value=0.0, unit="s",
+        ),
+        m05.TestResult(  # constant TID: no limits at all
+            tid=0x01, sensor=0x01,
+            raw_value=90, raw_min=None, raw_max=None,
+            value=0.45, min_value=None, max_value=None, unit="V",
+        ),
+    ]
+    worker.mode05.emit(results)
+    table = panel._table
+    assert table.rowCount() == 4
+    assert panel._count_label.text() == "4 test(s)"
+    summary = panel._hint.text()
+
+    panel._only_failures.setChecked(True)
+    assert table.rowCount() == 1
+    assert table.item(0, 6).text() == "FAIL"
+    assert panel._count_label.text() == "1 / 4 test(s)"
+    assert panel._hint.text() == summary  # summary always covers the full set
+
+    panel._only_failures.setChecked(False)
+    assert table.rowCount() == 4
+
+    worker.disconnected.emit("bye")
+    assert table.rowCount() == 0
+    assert not panel._read_btn.isEnabled()
     assert panel._count_label.text() == ""
 
 

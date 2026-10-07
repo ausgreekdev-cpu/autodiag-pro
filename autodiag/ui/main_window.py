@@ -36,6 +36,7 @@ from autodiag.ui.panels.explorer import PidExplorerPanel
 from autodiag.ui.panels.freeze import FreezeFramePanel
 from autodiag.ui.panels.history import HistoryPanel
 from autodiag.ui.panels.log_viewer import LogViewerPanel
+from autodiag.ui.panels.mode05 import Mode05Panel
 from autodiag.ui.panels.mode06 import Mode06Panel
 from autodiag.ui.panels.overview import OverviewPanel
 from autodiag.ui.panels.readiness import ReadinessPanel
@@ -175,6 +176,7 @@ class MainWindow(QMainWindow):
         self._alerts = AlertsPanel(self.worker, self.record, self._alert_log)
         self._stack.addWidget(self._alerts)
         self._alerts.thresholds_changed.connect(self._on_thresholds_changed)
+        self._stack.addWidget(Mode05Panel(self.worker))
 
         nav_items = (
             "Dashboard",
@@ -189,6 +191,7 @@ class MainWindow(QMainWindow):
             "PID explorer",
             "Overview",
             "Alerts",
+            "Mode $05",
         )
         nav = QWidget()
         nav.setFixedWidth(184)

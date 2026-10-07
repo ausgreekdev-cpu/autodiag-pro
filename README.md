@@ -36,6 +36,8 @@ port (USB cable or paired Bluetooth SPP dongle).
   fuel type (`01 1C`/`01 51`)
 - **Mode $06** — onboard test results (monitor + standardized test name vs. the
   min/max limits the ECU used, PASS/FAIL), with an *Only failures* filter
+- **Mode $05** — oxygen-sensor monitor test results for non-CAN buses
+  (ISO 9141 / J1850 / KWP; on CAN these tests surface in Mode $06)
 - **Reports** — export everything collected to JSON or CSV
 - **Resilient link** — if the adapter drops mid-session the app reconnects by itself
   (1–15 s backoff, up to 5 attempts) with live status in the window
@@ -89,7 +91,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 |---|---|
 | 1. Project bootstrap (tooling, CI) | done |
 | 2. ELM327 session + serial transport | done |
-| 3. Decoders (PIDs, DTC, freeze, readiness, VIN, Mode 06) | done |
+| 3. Decoders (PIDs, DTC, freeze, readiness, VIN, Mode 05/06) | done |
 | 4. Worker thread + polling scheduler | done |
 | 5. UI core (dashboard, gauges, live graph) | done |
 | 6. Diagnostic panels + settings + export | done |
@@ -144,12 +146,13 @@ autodiag            # or: python -m autodiag
    (1 s → 15 s backoff, 5 attempts).
 5. **Trouble codes** — press *Read codes*; switch tabs for pending/permanent.
    *Clear codes* asks for confirmation first.
-6. **Readiness / Freeze frame / Vehicle info / Mode $06** — each panel has its own
-   read button; results stay available for the report. The freeze-frame panel can
-   read any of frames 0–2 and keeps each frame cached for comparison.
-7. **Settings** — export the whole session (VIN, codes, monitors, Mode $06, latest
-   readings) as JSON or CSV, pin the OBD protocol if auto-detection fails or picks
-   the wrong one, or press *Check for updates* to compare the running version with
+6. **Readiness / Freeze frame / Vehicle info / Mode $05 / Mode $06** — each panel
+   has its own read button; results stay available for the report. The freeze-frame
+   panel can read any of frames 0–2 and keeps each frame cached for comparison.
+7. **Settings** — export the whole session (VIN, codes, monitors, Mode $05/$06,
+   latest readings) as JSON or CSV, pin the OBD protocol if auto-detection fails or
+   picks the wrong one, or press *Check for updates* to compare the running version
+   with
    the latest GitHub release.
 8. **History** — past sessions appear here automatically when you close the app
    (the newest 50 are kept). Select one to preview it, re-export it as JSON/CSV,
