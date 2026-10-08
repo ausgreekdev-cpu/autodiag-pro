@@ -132,6 +132,13 @@ def test_export_csv_and_json(tmp_path):
     parsed = json.loads(json_path.read_text(encoding="utf-8"))
     assert parsed["vehicle"]["vin"] == "1D4GP00R56B123457"
 
+    html_path = store.export(saved.name, tmp_path / "out.html")
+    assert html_path is not None
+    html_text = html_path.read_text(encoding="utf-8")
+    assert html_text.startswith("<!DOCTYPE html>")
+    assert "1D4GP00R56B123457" in html_text
+    assert "P0301" in html_text
+
     assert store.export("session-19990101-000000.json", tmp_path / "no.csv") is None
 
 

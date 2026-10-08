@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 from datetime import UTC, datetime
 
@@ -9,7 +10,13 @@ from autodiag.obd.elm327 import SessionInfo
 from autodiag.obd.mode05 import parse_tid_values
 from autodiag.obd.mode06 import parse_test_results
 from autodiag.obd.readiness import parse_monitor_status
-from autodiag.services.export import build_report, report_to_csv, report_to_json, write_report
+from autodiag.services.export import (
+    build_report,
+    report_to_csv,
+    report_to_html,
+    report_to_json,
+    write_report,
+)
 from autodiag.services.record import ScanRecord
 
 _NOW = datetime(2026, 1, 1, tzinfo=UTC)
@@ -131,9 +138,56 @@ def test_write_report_selects_format_by_suffix(tmp_path):
     record = make_record()
     json_path = write_report(record, tmp_path / "scan.json")
     csv_path = write_report(record, tmp_path / "scan.csv")
+    html_path = write_report(record, tmp_path / "scan.html")
 
     assert json.loads(json_path.read_text(encoding="utf-8"))["vehicle"]["vin"]
     assert csv_path.read_text(encoding="utf-8").startswith("section,")
+    assert html_path.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
+
+
+def test_report_html_contains_sections():
+    report = build_report(make_record(), now=_NOW)
+    text = report_to_html(report)
+
+    assert text.startswith("<!DOCTYPE html>")
+    assert "<style>" in text
+    assert "<script" not in text
+    assert "1D4GP00R56B123457" in text
+    assert "P0301" in text
+    assert html.escape(report["dtcs"]["stored"][0]["description"]) in text
+    assert html.escape(report["readiness"]["monitors"][0]["name"]) in text
+    assert report["mode06"][0]["result"] in text
+    assert report["mode05"][0]["result"] in text
+    assert "Rich-to-lean sensor threshold voltage" in text
+    assert "Engine RPM" in text
+    assert "badge pass" in text or "badge fail" in text
+
+
+def test_report_html_escapes_markup():
+    report = {
+        "app": {"name": "AutoDiag Pro", "version": "0.17.0"},
+        "generated_at": "2026-01-01T00:00:00+00:00",
+        "adapter": {"name": "ELM327", "protocol": None, "voltage": 12.0},
+        "vehicle": {
+            "vin": "<script>alert(1)</script>",
+            "calibration_ids": [],
+            "cvn": [],
+            "obd_standard": "EOBD",
+            "fuel_type": "Petrol & gas",
+        },
+        "readiness": None,
+        "dtcs": {"stored": [{"code": "P0301", "description": "<b>boom</b>"}]},
+        "freeze_frame": [],
+        "mode06": [],
+        "mode05": [],
+        "live_data": [],
+    }
+    text = report_to_html(report)
+
+    assert "<script" not in text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in text
+    assert "&lt;b&gt;boom&lt;/b&gt;" in text
+    assert "Petrol &amp; gas" in text
 
 
 def test_record_keeps_vehicle_data_after_disconnect():

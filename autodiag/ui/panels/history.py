@@ -27,6 +27,8 @@ from autodiag.ui.compare_dialog import CompareDialog
 _COLUMNS = ("Date", "VIN", "DTCs", "Mode $06", "PIDs", "Adapter", "Log")
 _JSON_FILTER = "JSON report (*.json)"
 _CSV_FILTER = "CSV report (*.csv)"
+_HTML_FILTER = "HTML report (*.html)"
+_EXPORT_FILTERS = {".json": _JSON_FILTER, ".csv": _CSV_FILTER, ".html": _HTML_FILTER}
 
 
 class HistoryPanel(QWidget):
@@ -56,17 +58,20 @@ class HistoryPanel(QWidget):
         self._view_log_btn = QPushButton("View log…")
         self._export_json_btn = QPushButton("Export JSON…")
         self._export_csv_btn = QPushButton("Export CSV…")
+        self._export_html_btn = QPushButton("Export HTML…")
         self._delete_btn = QPushButton("Delete")
         self._compare_btn.clicked.connect(self._open_compare)
         self._view_log_btn.clicked.connect(self._on_view_log)
         self._export_json_btn.clicked.connect(lambda: self._export(".json"))
         self._export_csv_btn.clicked.connect(lambda: self._export(".csv"))
+        self._export_html_btn.clicked.connect(lambda: self._export(".html"))
         self._delete_btn.clicked.connect(self._delete)
         for button in (
             self._compare_btn,
             self._view_log_btn,
             self._export_json_btn,
             self._export_csv_btn,
+            self._export_html_btn,
             self._delete_btn,
         ):
             button.setEnabled(False)
@@ -180,7 +185,10 @@ class HistoryPanel(QWidget):
             return
         default = f"{self._selected.removesuffix('.json')}{suffix}"
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export session", default, _JSON_FILTER if suffix == ".json" else _CSV_FILTER
+            self,
+            "Export session",
+            default,
+            _EXPORT_FILTERS.get(suffix, _JSON_FILTER),
         )
         if path:
             self._store.export(self._selected, path)

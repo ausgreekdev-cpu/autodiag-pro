@@ -16,7 +16,7 @@ from typing import Any
 
 from PySide6.QtCore import QStandardPaths
 
-from autodiag.services.export import report_to_csv, report_to_json
+from autodiag.services.export import report_text
 from autodiag.services.record import ScanRecord
 
 KEEP = 50  # sessions retained on disk (oldest pruned)
@@ -80,12 +80,7 @@ class SessionStore:
         if report is None:
             return None
         target = Path(target)
-        text = (
-            report_to_csv(report)
-            if target.suffix.lower() == ".csv"
-            else report_to_json(report)
-        )
-        target.write_text(text, encoding="utf-8")
+        target.write_text(report_text(report, target.suffix.lower()), encoding="utf-8")
         return target
 
     def delete(self, name: str) -> bool:

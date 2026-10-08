@@ -26,6 +26,8 @@ from autodiag.ui.prefs import PROTOCOL_CHOICES, Prefs
 
 _JSON_FILTER = "JSON report (*.json)"
 _CSV_FILTER = "CSV report (*.csv)"
+_HTML_FILTER = "HTML report (*.html)"
+_EXPORT_FILTERS = {"json": _JSON_FILTER, "csv": _CSV_FILTER, "html": _HTML_FILTER}
 
 
 class UpdateCheckWorker(QThread):
@@ -105,6 +107,9 @@ class SettingsPanel(QWidget):
         self._csv_btn = QPushButton("Export CSV…")
         self._csv_btn.clicked.connect(lambda: self.export_with_dialog("csv"))
         buttons.addWidget(self._csv_btn)
+        self._html_btn = QPushButton("Export HTML…")
+        self._html_btn.clicked.connect(lambda: self.export_with_dialog("html"))
+        buttons.addWidget(self._html_btn)
         buttons.addStretch(1)
         report_layout.addLayout(buttons)
 
@@ -189,7 +194,7 @@ class SettingsPanel(QWidget):
     # -- export -----------------------------------------------------------------
 
     def export_with_dialog(self, suffix: str) -> None:
-        _filter = _JSON_FILTER if suffix == "json" else _CSV_FILTER
+        _filter = _EXPORT_FILTERS.get(suffix, _JSON_FILTER)
         path, _selected = QFileDialog.getSaveFileName(
             self,
             "Export scan report",

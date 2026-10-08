@@ -310,6 +310,9 @@ def test_settings_panel_exports(qapp, tmp_path):
     csv_target = panel.export_to(tmp_path / "scan.csv")
     assert csv_target.read_text(encoding="utf-8").startswith("section,")
 
+    html_target = panel.export_to(tmp_path / "scan.html")
+    assert html_target.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
+
 
 def test_settings_panel_mentions_dictionary_size(qapp):
     panel = SettingsPanel(ScanRecord(), lambda _msg: None)
