@@ -19,9 +19,9 @@ port (USB cable or paired Bluetooth SPP dongle).
   readiness (MIL + monitor completion), your last saved session, and one-click
   shortcuts into the panels
 - **Live data** — engine RPM, speed, coolant, load, fuel trims, O2 sensors (voltage
-  **and** short-term fuel trim per sensor)... ~40 SAE J1979 PIDs discovered from the
-  vehicle (`0100` supported-PID bitmaps), four headline gauges + a scrolling graph of
-  any ticked parameters
+  **and** short-term fuel trim per sensor)... the full standard SAE J1979 registry
+  (160 channels) filtered to what the vehicle reports as supported (`0100`
+  bitmaps), four headline gauges + a scrolling graph of any ticked parameters
 - **Threshold alerts** — watch any parameter against a min/max limit while
   polling: the dashboard cell lights amber on a crossing, the status bar
   flashes the reading vs. the limit, and every excursion lands in an Alerts
@@ -59,7 +59,7 @@ port (USB cable or paired Bluetooth SPP dongle).
   hover cursor readout, PNG export; jump straight from a history session's
   *View log…* button
 - **Session compare** — diff any two saved sessions: codes added/removed,
-  readiness and MIL flips, Mode $06 pass/fail changes, live-value deltas,
+  readiness and MIL flips, Mode $05/$06 pass/fail changes, live-value deltas,
   plus a warning when the two VINs differ
 - **PID explorer** — request any parameter on demand and see the raw response
   beside the decoded value; *Force* sends unsupported PIDs too, and one click
