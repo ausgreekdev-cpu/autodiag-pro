@@ -28,7 +28,16 @@ def qapp():
         QSettings.Format.IniFormat, QSettings.Scope.UserScope, _SETTINGS_DIR
     )
     apply_theme(app)
-    return app
+    yield app
+    # PySide6 6.12.0 corrupts the heap when widgets whose Python wrappers are
+    # only kept alive by signal→bound-method cycles are finally collected
+    # during interpreter shutdown ("shared QObject was deleted directly" ->
+    # malloc_consolidate abort). Destroy every widget here, while Qt is still
+    # fully alive: the C++ cascade deletes children first, and the leftover
+    # Python wrappers then tear down without touching freed memory.
+    for widget in app.allWidgets():
+        widget.deleteLater()
+    app.processEvents()
 
 
 @pytest.fixture(autouse=True)
