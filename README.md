@@ -112,6 +112,8 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 20. Euro-complete generic layer + protocol pinning (v0.15.0) | done |
 | 21. Mode $05 O2 monitor tests (v0.16.0) | done |
 | 22. Mode $05 compare + full PID registry (v0.17.0) | done |
+| 23. Single-file HTML diagnostic report (v0.18.0) | done |
+| 24. Freeze-frame compare (v0.18.0) | done |
 
 ## Install & run
 
