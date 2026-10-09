@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from autodiag.obd.uds import UdsError, UdsResponse, decode_did
 from autodiag.services.engine import ObdEngine
 from autodiag.transports.base import TransportError
 from tests.fakes import scripted_connector
@@ -733,3 +734,62 @@ def test_default_connector_passes_pinned_protocol(monkeypatch):
 
     engine._default_connector("/dev/OBD")
     assert captured == {"device": "/dev/OBD", "protocol": "6"}
+
+
+def test_uds_job_addresses_ecu_emits_response_and_restores_header():
+    connector, holder = scripted_connector(
+        {
+            "AT SH 7E0": b"\r\r>",
+            "AT CRA 7E8": b"\r\r>",
+            "22F190": b"62F1903144344750303052353642313233343537\r\r>",
+            "AT SH": b"\r\r>",
+            "AT CRA": b"\r\r>",
+        }
+    )
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "/dev/OBD")
+    assert engine.step(0.0)
+
+    engine.submit("uds", ("7E0", "7E8", "22F190", None))
+    assert _pump(engine, lambda: sink.of("uds"))
+
+    request, response = sink.last("uds")[0]
+    assert request == "22F190"
+    assert isinstance(response, UdsResponse)
+    assert response.sid == 0x62
+    assert decode_did(0xF190, response.payload[2:]) == "1D4GP00R56B123457"
+
+    writes = holder["transport"].writes
+    assert writes.index("AT SH 7E0") < writes.index("22F190")
+    assert writes.index("AT CRA 7E8") < writes.index("22F190")
+    # headers restored to the functional default after the exchange
+    assert writes[-2:] == ["AT SH", "AT CRA"]
+
+
+def test_uds_job_negative_response_emits_uds_not_error():
+    connector, holder = scripted_connector(
+        {
+            "AT SH 7E1": b"\r\r>",
+            "AT CRA 7E9": b"\r\r>",
+            "1902FF": b"7F1912\r\r>",
+            "AT SH": b"\r\r>",
+            "AT CRA": b"\r\r>",
+        }
+    )
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "/dev/OBD")
+    assert engine.step(0.0)
+
+    engine.submit("uds", ("7E1", "7E9", "1902FF", None))
+    assert _pump(engine, lambda: sink.of("uds"))
+
+    request, result = sink.last("uds")[0]
+    assert request == "1902FF"
+    assert isinstance(result, UdsError)
+    assert result.sid == 0x19 and result.nrc == 0x12
+    assert "subFunctionNotSupported" in str(result)
+    assert not sink.of("error"), "a NRC must not tear down the session"
+    assert holder["transport"].writes[-2:] == ["AT SH", "AT CRA"]
+    assert engine.connected

@@ -13,6 +13,7 @@ from autodiag.obd.elm327 import SessionInfo
 from autodiag.obd.mode05 import parse_tid_values
 from autodiag.obd.mode06 import parse_test_results
 from autodiag.obd.readiness import parse_monitor_status
+from autodiag.obd.uds import UdsError, UdsResponse
 from autodiag.services.alerts import AlertLog, Threshold, Watchlist
 from autodiag.services.export import build_report
 from autodiag.services.history import SessionStore
@@ -32,6 +33,7 @@ from autodiag.ui.panels.overview import OverviewPanel
 from autodiag.ui.panels.readiness import ReadinessPanel
 from autodiag.ui.panels.settings import SettingsPanel
 from autodiag.ui.panels.trouble_codes import TroubleCodesPanel
+from autodiag.ui.panels.uds import UdsPanel
 from autodiag.ui.panels.vehicle import VehicleInfoPanel
 from tests.test_export import make_record
 
@@ -1066,3 +1068,116 @@ def test_alerts_panel_display_is_capped(qapp):
         event = log.evaluate(0x0C, 6500.0 + i, float(i))
         panel.append_event(event)
     assert panel._events_table.rowCount() == MAX_EVENTS
+
+
+def test_uds_panel_gates_offline_and_sends_raw_request(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    assert not panel._raw_btn.isEnabled()
+    assert not panel._session_btn.isEnabled()
+    assert "Connect" in panel._status.text()
+
+    worker.connected.emit(None)
+    assert panel._raw_btn.isEnabled()
+
+    panel._tx_edit.setText("7e1")
+    assert panel._rx_label.text() == "→ 7E9"
+
+    sent: list[tuple] = []
+    monkeypatch.setattr(
+        worker, "uds_request", lambda req, **kwargs: sent.append((req, kwargs))
+    )
+    panel._raw_edit.setText("22f190")
+    panel._raw_btn.click()
+    assert sent == [("22F190", {"tx": "7E1"})]
+
+
+def test_uds_panel_blocks_write_service_locally(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    sent: list[str] = []
+    monkeypatch.setattr(worker, "uds_request", lambda req, **_kw: sent.append(req))
+
+    panel._raw_edit.setText("2EF1904142")
+    panel._raw_btn.click()
+    assert sent == []
+    assert "WriteDataByIdentifier" in panel._status.text()
+
+    panel._raw_edit.setText("22F19")  # odd length
+    panel._raw_btn.click()
+    assert sent == []
+    assert "even number of hex digits" in panel._status.text()
+
+
+def test_uds_panel_presets_build_canonical_requests(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    sent: list[str] = []
+    monkeypatch.setattr(worker, "uds_request", lambda req, **_kw: sent.append(req))
+
+    panel._session_btn.click()
+    panel._present_btn.click()
+    panel._dtc_btn.click()
+    assert sent == ["1003", "3E00", "1902FF"]
+
+
+def test_uds_panel_reads_custom_did(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    sent: list[str] = []
+    monkeypatch.setattr(worker, "uds_request", lambda req, **_kw: sent.append(req))
+
+    panel._did_combo.setCurrentIndex(0)  # F190 VIN
+    panel._did_btn.click()
+    assert sent == ["22F190"]
+
+    panel._did_edit.setText("F195")
+    panel._did_btn.click()
+    assert sent[-1] == "22F195"
+
+
+def test_uds_panel_renders_vin_response_and_nrc(qapp):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+
+    worker.uds.emit(
+        (
+            "22F190",
+            UdsResponse(
+                0x62,
+                bytes.fromhex("F190") + b"1D4GP00R56B123457",
+                "62F1903144344750303052353642313233343537",
+            ),
+        )
+    )
+    assert panel._table.rowCount() == 1
+    assert panel._table.item(0, 1).text() == "22F190"
+    assert panel._table.item(0, 2).text() == "1D4GP00R56B123457"
+
+    worker.uds.emit(
+        (
+            "1902FF",
+            UdsError(
+                "requestOutOfRange (NRC 0x31 for service $19)",
+                sid=0x19,
+                nrc=0x31,
+                raw="7F1931",
+            ),
+        )
+    )
+    assert panel._table.rowCount() == 2
+    assert "requestOutOfRange" in panel._table.item(0, 2).text()
+    assert panel._table.item(0, 3).text() == "7F1931"
+
+
+def test_uds_response_row_count_is_capped(qapp):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    for i in range(105):
+        worker.uds.emit(("22F190", UdsResponse(0x62, bytes([i % 256]), "62")))
+    assert panel._table.rowCount() == 100

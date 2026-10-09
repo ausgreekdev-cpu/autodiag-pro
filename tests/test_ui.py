@@ -403,7 +403,7 @@ def test_dashboard_filter_survives_reconnect_and_keeps_check_state(qapp):
 def test_main_window_navigation(qapp, tmp_path):
     window = MainWindow(prefs=_fresh_prefs(tmp_path))
     stack = window.findChildren(QStackedWidget)[0]
-    assert stack.count() == 13
+    assert stack.count() == 14
 
     window.show_panel(2)
     assert stack.currentIndex() == 2
@@ -433,6 +433,10 @@ def test_main_window_navigation(qapp, tmp_path):
     window.show_panel(12)
     assert stack.currentIndex() == 12
     assert _button(window, "Mode $05").isChecked()
+
+    window.show_panel(13)
+    assert stack.currentIndex() == 13
+    assert _button(window, "UDS").isChecked()
 
     window.show_panel(0)
     assert stack.currentIndex() == 0

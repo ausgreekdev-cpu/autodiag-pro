@@ -42,6 +42,7 @@ from autodiag.ui.panels.overview import OverviewPanel
 from autodiag.ui.panels.readiness import ReadinessPanel
 from autodiag.ui.panels.settings import SettingsPanel
 from autodiag.ui.panels.trouble_codes import TroubleCodesPanel
+from autodiag.ui.panels.uds import UdsPanel
 from autodiag.ui.panels.vehicle import VehicleInfoPanel
 from autodiag.ui.prefs import Prefs
 
@@ -177,6 +178,7 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._alerts)
         self._alerts.thresholds_changed.connect(self._on_thresholds_changed)
         self._stack.addWidget(Mode05Panel(self.worker))
+        self._stack.addWidget(UdsPanel(self.worker))
 
         nav_items = (
             "Dashboard",
@@ -192,6 +194,7 @@ class MainWindow(QMainWindow):
             "Overview",
             "Alerts",
             "Mode $05",
+            "UDS",
         )
         nav = QWidget()
         nav.setFixedWidth(184)

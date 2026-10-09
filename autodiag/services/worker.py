@@ -33,6 +33,7 @@ class ObdWorker(QThread):
     mids_supported = Signal(object)  # set[int]
     mode05 = Signal(object)  # list[mode05.TestResult]
     mode06 = Signal(object)  # list[TestResult]
+    uds = Signal(object)  # (request_hex, UdsResponse | UdsError)
     voltage = Signal(float)
     reconnecting = Signal(int, int)  # (attempt about to run, max); (0, 0) = gave up
 
@@ -54,6 +55,7 @@ class ObdWorker(QThread):
         "mids_supported",
         "mode05",
         "mode06",
+        "uds",
         "voltage",
         "reconnecting",
     )
@@ -110,6 +112,22 @@ class ObdWorker(QThread):
     def request_pid(self, pid: int) -> None:
         """One-shot request for any parameter (supported or forced)."""
         self._engine.submit("request_pid", pid)
+
+    def uds_request(
+        self,
+        hex_request: str,
+        *,
+        tx: str = "7E0",
+        rx: str | None = None,
+        timeout: float | None = None,
+    ) -> None:
+        """One UDS exchange against a physical CAN ID (read services only).
+
+        ``rx`` defaults to ``tx + 8`` (ISO 15765-4 11-bit pairing).
+        """
+        if rx is None:
+            rx = f"{int(tx, 16) + 8:03X}"
+        self._engine.submit("uds", (tx, rx, hex_request, timeout))
 
     # -- lifecycle -------------------------------------------------------------
 

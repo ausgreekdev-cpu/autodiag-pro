@@ -65,6 +65,10 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **PID explorer** — request any parameter on demand and see the raw response
   beside the decoded value; *Force* sends unsupported PIDs too, and one click
   pins the parameter to the dashboard graph
+- **UDS (ISO 14229) requests** — read-only diagnostic services ($10 session,
+  $19 DTCs, $22 read-DID with VIN/ASCII decode, $3E tester present) against
+  any physical CAN ID (7E0, 7E1, …); custom hex is allowed, write/actuation
+  services are refused, and CAN headers are restored after every exchange
 - **Update check** — press *Check for updates* in Settings (or run
   `autodiag updates`) to compare against the latest GitHub release; one
   request, only when you ask
@@ -178,6 +182,11 @@ autodiag            # or: python -m autodiag
     dashboard value in amber, flash in the status bar and collect here with
     the time, value and limit; *Export CSV…* saves the history, and the
     thresholds themselves are remembered between launches.
+12. **UDS** — set the physical ECU header (the response ID follows TX + 8,
+    e.g. `7E0` → `7E8`), then send read-only ISO 14229 requests via the
+    preset buttons, the known-DID picker (VIN `F190` first) or raw hex;
+    results decode above the raw response, and write services ($2E/$31/$2F)
+    are refused before they reach the bus.
 
 ## Command-line tools
 
@@ -256,6 +265,7 @@ auto-detected.
 | Port missing from the list | Linux: add yourself to the `dialout` group, re-plug; Bluetooth: pair the SPP device first |
 | Values stuck at `--` | Vehicle may not support those PIDs — the table only shows supported ones |
 | CAN errors while polling | Slow the poll interval down (e.g. 500 ms) |
+| UDS request answered `?` or `NO DATA` | Clone ELM327 units often reject the custom `AT SH`/`AT CRA` headers UDS needs — STN1110, OBDLink and vLinker adapters support them |
 | Connection lost mid-scan | The app reconnects by itself (5 attempts over ~30 s); if it gives up, press *Connect* again |
 
 ## Project layout

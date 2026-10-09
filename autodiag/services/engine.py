@@ -15,7 +15,7 @@ from collections.abc import Callable
 from typing import Any
 
 from autodiag.obd import dtc as dtc_dec
-from autodiag.obd import framing, freeze_frame, mode05, mode06, readiness, vehicle
+from autodiag.obd import framing, freeze_frame, mode05, mode06, readiness, uds, vehicle
 from autodiag.obd import pids as pid_dec
 from autodiag.obd.elm327 import VALID_PROTOCOLS, ElmError, SessionInfo
 from autodiag.transports.base import TransportError
@@ -399,6 +399,33 @@ class ObdEngine:
         self._emit("pid_response", pid, text)
         for channel, value in pid_dec.parse_pid_values(text, pid).items():
             self._emit("pid_value", channel, value, self._clock())
+
+    def _job_uds(self, payload: tuple[str, str, str, float | None]) -> None:
+        """One UDS exchange with physical addressing; headers restored after.
+
+        Negative responses are emitted on the ``uds`` channel as
+        :class:`UdsError` so the panel can render the NRC; adapter-level
+        failures keep flowing through the existing ``error`` path.
+        """
+        tx, rx, hex_request, timeout = payload
+        self._emit("status", f"UDS {hex_request} → {tx}")
+        try:
+            self._req(f"AT SH {tx}")
+            self._req(f"AT CRA {rx}")
+            try:
+                text = self._req(hex_request, timeout)
+                result: object = uds.parse_response(text)
+            except uds.UdsError as exc:
+                result = exc
+            self._emit("uds", (hex_request, result))
+        finally:
+            # Functional default restored so later OBD polls (0100, ...) are
+            # not accidentally sent physically to this one ECU.
+            for cmd in ("AT SH", "AT CRA"):
+                try:
+                    self._req(cmd)
+                except ElmError:
+                    pass  # best-effort restore; a dead link surfaces elsewhere
 
     # -- polling -------------------------------------------------------------
 
