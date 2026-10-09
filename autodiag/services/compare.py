@@ -1,4 +1,4 @@
-"""Diff two session reports (codes, readiness, tests, live values)."""
+"""Diff two session reports (codes, readiness, tests, freeze frame, live values)."""
 
 from __future__ import annotations
 
@@ -96,12 +96,42 @@ def compare_reports(baseline: dict, current: dict) -> dict[str, Any]:
             }
         )
 
+    freeze_a = {
+        (item.get("frame"), item.get("pid")): item
+        for item in baseline.get("freeze_frame") or []
+    }
+    freeze_b = {
+        (item.get("frame"), item.get("pid")): item
+        for item in current.get("freeze_frame") or []
+    }
+    freeze_changed = []
+    for key in freeze_b:  # current-report order; only matched pairs count
+        if key not in freeze_a:
+            continue
+        old = float(freeze_a[key]["value"])
+        new = float(freeze_b[key]["value"])
+        if old == new:
+            continue
+        template = freeze_b[key]
+        freeze_changed.append(
+            {
+                "frame": template.get("frame"),
+                "pid": template.get("pid"),
+                "name": template.get("name") or freeze_a[key].get("name") or key[1],
+                "unit": template.get("unit") or freeze_a[key].get("unit") or "",
+                "old": old,
+                "new": new,
+                "delta": new - old,
+            }
+        )
+
     return {
         "vin_mismatch": vin_mismatch,
         "dtcs": {"added": added, "removed": removed},
         "readiness": readiness,
         "mode06": {"now_failing": now_failing, "recovered": recovered},
         "mode05": {"now_failing": o2_now_failing, "recovered": o2_recovered},
+        "freeze_frame": {"changed": freeze_changed},
         "live_data": deltas,
     }
 
@@ -120,7 +150,10 @@ def has_changes(diff: dict[str, Any]) -> bool:
     if mode06.get("now_failing") or mode06.get("recovered"):
         return True
     mode05 = diff.get("mode05") or {}
-    return bool(mode05.get("now_failing") or mode05.get("recovered"))
+    if mode05.get("now_failing") or mode05.get("recovered"):
+        return True
+    freeze = diff.get("freeze_frame") or {}
+    return bool(freeze.get("changed"))
 
 
 def format_comparison(
@@ -173,6 +206,12 @@ def format_comparison(
         for entry in mode05.get("recovered") or []:
             lines.append(f"  now PASS: {_o2_line(entry)}")
 
+    freeze = diff.get("freeze_frame") or {}
+    if freeze.get("changed"):
+        lines.append("Freeze frame:")
+        for entry in freeze["changed"]:
+            lines.append(f"  {_freeze_line(entry)}")
+
     # zero-drift rows are noise; has_changes ignores live data entirely
     deltas = [item for item in diff.get("live_data") or [] if item["delta"] != 0.0]
     if deltas:
@@ -210,6 +249,15 @@ def _o2_line(entry: dict[str, Any]) -> str:
     return (
         f"{sensor} TID {entry.get('tid')} — {entry.get('test')} "
         f"({entry.get('value')} {entry.get('unit')})"
+    )
+
+
+def _freeze_line(entry: dict[str, Any]) -> str:
+    unit = f" {entry['unit']}" if entry["unit"] else ""
+    return (
+        f"{entry['name']} (frame {entry['frame']}): "
+        f"{_num(entry['old'])} → {_num(entry['new'])}{unit} "
+        f"({_signed(entry['delta'])})"
     )
 
 

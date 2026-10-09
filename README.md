@@ -60,8 +60,8 @@ port (USB cable or paired Bluetooth SPP dongle).
   hover cursor readout, PNG export; jump straight from a history session's
   *View log…* button
 - **Session compare** — diff any two saved sessions: codes added/removed,
-  readiness and MIL flips, Mode $05/$06 pass/fail changes, live-value deltas,
-  plus a warning when the two VINs differ
+  readiness and MIL flips, Mode $05/$06 pass/fail changes, freeze-frame
+  value changes, live-value deltas, plus a warning when the two VINs differ
 - **PID explorer** — request any parameter on demand and see the raw response
   beside the decoded value; *Force* sends unsupported PIDs too, and one click
   pins the parameter to the dashboard graph

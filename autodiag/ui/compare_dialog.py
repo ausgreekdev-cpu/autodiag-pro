@@ -1,4 +1,4 @@
-"""Dialog: diff two saved sessions (codes, readiness, tests, values)."""
+"""Dialog: diff two saved sessions (codes, readiness, tests, freeze, values)."""
 
 from __future__ import annotations
 

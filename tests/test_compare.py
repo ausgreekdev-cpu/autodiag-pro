@@ -186,6 +186,46 @@ def test_mode05_not_run_results_never_flip():
     assert "Mode $05:" not in _format(diff)
 
 
+def _freeze(frame, pid, value, name="Engine RPM", unit="rpm"):
+    return {"frame": frame, "pid": pid, "name": name, "unit": unit, "value": value}
+
+
+def test_freeze_frame_changed_values():
+    baseline = _report(freeze_frame=[_freeze(0, "0C", 1726.0)])
+    current = _report(freeze_frame=[_freeze(0, "0C", 1801.0)])
+    diff = compare_reports(baseline, current)
+    (entry,) = diff["freeze_frame"]["changed"]
+    assert entry["frame"] == 0
+    assert entry["pid"] == "0C"
+    assert entry["old"] == 1726.0
+    assert entry["new"] == 1801.0
+    assert entry["delta"] == 75.0
+    assert has_changes(diff) is True
+
+    text = _format(diff)
+    assert "Freeze frame:" in text
+    assert "Engine RPM (frame 0): 1726 → 1801 rpm (+75)" in text
+
+
+def test_freeze_frame_unchanged_and_unmatched_hidden():
+    baseline = _report(
+        freeze_frame=[_freeze(0, "0C", 1726.0), _freeze(0, "05", 83.0, "Fuel level")]
+    )
+    current = _report(freeze_frame=[_freeze(0, "0C", 1726.0)])
+    diff = compare_reports(baseline, current)  # 05 only in baseline → ignored
+    assert diff["freeze_frame"] == {"changed": []}
+    assert has_changes(diff) is False
+    assert "Freeze frame:" not in _format(diff)
+
+
+def test_freeze_frame_skipped_when_missing():
+    with_freeze = _report(freeze_frame=[_freeze(0, "0C", 1726.0)])
+    diff = compare_reports(with_freeze, _report())  # session that never read freeze
+    assert diff["freeze_frame"] == {"changed": []}
+    assert has_changes(diff) is False
+    assert "Freeze frame:" not in _format(diff)
+
+
 def test_live_data_deltas_with_zero_baseline():
     baseline = _report(
         live_data=[
