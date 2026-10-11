@@ -6,6 +6,7 @@ import json
 from datetime import UTC, datetime, timedelta
 
 from autodiag.obd.elm327 import SessionInfo
+from autodiag.obd.uds import parse_response
 from autodiag.services.export import build_report
 from autodiag.services.history import (
     KEEP,
@@ -186,3 +187,26 @@ def test_record_has_data_gates_auto_save():
 
     record.record_event("pid_value", (0x0C, 1726.0, 1.0))
     assert record_has_data(record) is True
+
+
+def test_record_has_data_accepts_uds_only_session():
+    record = ScanRecord()
+    record.record_event(
+        "uds",
+        (("22F190", parse_response("62F1903144344750303052353642313233343537")),),
+    )
+    assert record_has_data(record) is True
+
+
+def test_describe_report_summarizes_uds():
+    report = _report()
+    report["uds"] = [
+        {"request": "22F190", "ok": True, "result": "1D4GP00R56B123457"},
+        {"request": "1902FF", "ok": False, "result": "serviceNotSupported"},
+    ]
+    text = describe_report(report)
+    assert "UDS: 2 request(s)" in text
+    assert "1 negative response(s)" in text
+
+    plain = _report()
+    assert "UDS:" not in describe_report(plain)

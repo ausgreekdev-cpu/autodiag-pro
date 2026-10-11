@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from autodiag import __version__
-from autodiag.obd import dictionary
+from autodiag.obd import dictionary, framing
 from autodiag.obd.pids import PID_REGISTRY
+from autodiag.obd.uds import UdsResponse, describe_response
 from autodiag.services.record import ScanRecord
 
 
@@ -105,6 +106,23 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
             }
         )
 
+    uds = []
+    for timestamp, request, result in record.uds:
+        raw = framing.flatten_response(str(getattr(result, "raw", "") or ""))
+        uds.append(
+            {
+                "time": datetime.fromtimestamp(timestamp).isoformat(timespec="seconds"),
+                "request": request,
+                "ok": isinstance(result, UdsResponse),
+                "result": (
+                    describe_response(request, result)
+                    if isinstance(result, UdsResponse)
+                    else str(result)
+                ),
+                "raw": raw,
+            }
+        )
+
     generated = now or datetime.now(UTC)
     report: dict[str, Any] = {
         "app": {"name": "AutoDiag Pro", "version": __version__},
@@ -126,6 +144,7 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
         "freeze_frame": freeze,
         "mode06": mode06,
         "mode05": mode05,
+        "uds": uds,
         "live_data": pids,
     }
     if record.log_file:
@@ -200,6 +219,15 @@ def report_to_csv(report: dict[str, Any]) -> str:
 
     for item in report["live_data"]:
         add("live_data", item["pid"], item["name"], f"{item['value']} {item['unit']}")
+
+    for item in report.get("uds") or []:
+        outcome = "OK" if item.get("ok") else "ERR"
+        add(
+            "uds",
+            str(item.get("request") or ""),
+            str(item.get("time") or ""),
+            f"{outcome}: {item.get('result') or ''}",
+        )
 
     live_log = report.get("live_log")
     if live_log:
@@ -442,6 +470,25 @@ def report_to_html(report: dict[str, Any]) -> str:
             section(
                 "Mode $05 O2 sensor tests",
                 table(["Sensor", "TID", "Test", "Value", "Range", "Result"], rows),
+            )
+        )
+
+    uds_requests = report.get("uds") or []
+    if uds_requests:
+        rows = [
+            [
+                h(item.get("time")),
+                f"<code>{h(item.get('request'))}</code>",
+                badge("OK", "pass") if item.get("ok") else badge("NRC", "fail"),
+                h(item.get("result")),
+                h(item.get("raw")),
+            ]
+            for item in uds_requests
+        ]
+        parts.append(
+            section(
+                "UDS requests",
+                table(["Time", "Request", "Status", "Result", "Raw"], rows),
             )
         )
 

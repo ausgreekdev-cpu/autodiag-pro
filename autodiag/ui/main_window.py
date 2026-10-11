@@ -247,6 +247,7 @@ class MainWindow(QMainWindow):
         )
         worker.mode06.connect(lambda results: record("mode06", (results,)))
         worker.mode05.connect(lambda results: record("mode05", (results,)))
+        worker.uds.connect(lambda payload: record("uds", (payload,)))
 
         # time-series CSV logger (feeds itself from the same signal)
         self._dashboard.log_toggled.connect(self._on_log_armed)

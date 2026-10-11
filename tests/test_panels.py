@@ -1120,7 +1120,22 @@ def test_uds_panel_presets_build_canonical_requests(qapp, monkeypatch):
     panel._session_btn.click()
     panel._present_btn.click()
     panel._dtc_btn.click()
-    assert sent == ["1003", "3E00", "1902FF"]
+    panel._supported_btn.click()
+    assert sent == ["1003", "3E00", "1902FF", "190A"]
+
+
+def test_uds_panel_ecu_preset_fills_header(qapp):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+
+    panel._ecu_combo.setCurrentIndex(1)  # 7E1 (TCM)
+    assert panel._tx_edit.text() == "7E1"
+    assert panel._rx_label.text() == "→ 7E9"
+
+    panel._ecu_combo.setCurrentIndex(0)  # 7E0 (ECM)
+    assert panel._tx_edit.text() == "7E0"
+    assert panel._rx_label.text() == "→ 7E8"
 
 
 def test_uds_panel_reads_custom_did(qapp, monkeypatch):
@@ -1172,6 +1187,26 @@ def test_uds_panel_renders_vin_response_and_nrc(qapp):
     assert panel._table.rowCount() == 2
     assert "requestOutOfRange" in panel._table.item(0, 2).text()
     assert panel._table.item(0, 3).text() == "7F1931"
+
+
+def test_uds_panel_renders_decoded_dtc_list(qapp):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+
+    worker.uds.emit(
+        (
+            "1902FF",
+            UdsResponse(
+                0x59,
+                bytes.fromhex("02FF01230008C123452F"),
+                "5902FF01230008C123452F",
+            ),
+        )
+    )
+    assert panel._table.rowCount() == 1
+    text = panel._table.item(0, 2).text()
+    assert "2 DTC(s)" in text and "P0123 [08]" in text and "U0123 [2F]" in text
 
 
 def test_uds_response_row_count_is_capped(qapp):

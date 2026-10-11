@@ -14,6 +14,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from autodiag.obd import dtc as dtc_dec
 from autodiag.obd import framing
 
 # Common negative response codes (ISO 14229-1 table); unknown codes fall back
@@ -116,6 +117,11 @@ def read_dtc_by_status_mask(mask: int = 0xFF) -> str:
     return f"1902{mask:02X}"
 
 
+def report_supported_dtc() -> str:
+    """``$19`` ReadDTCInformation sub-function 0x0A (supported DTCs)."""
+    return "190A"
+
+
 def response_header(tx_header: str) -> str:
     """Expected response ID for a transmit header (TX + 8 on CAN 11-bit)."""
     return f"{int(tx_header, 16) + 8:03X}"
@@ -185,3 +191,48 @@ def decode_did(did: int, payload: bytes) -> str:
     if trimmed and all(0x20 <= b <= 0x7E for b in trimmed):
         return trimmed.decode("ascii")
     return " ".join(f"{b:02X}" for b in payload) or "(no data)"
+
+
+def parse_dtc_records(response: UdsResponse) -> list[tuple[str, int]]:
+    """DTC + status records from a ``$19`` positive response (subs 0x02/0x0A).
+
+    Payload layout after the SID: sub-function echo, status-availability
+    mask, then 4-byte records (3-byte DTC number + 1 status byte).
+    """
+    if response.sid != 0x59 or len(response.payload) < 3:
+        return []
+    body = response.payload[2:]  # past sub-function echo + availability mask
+    records: list[tuple[str, int]] = []
+    for offset in range(0, len(body) - 3, 4):
+        high, low, _failure, status = body[offset : offset + 4]
+        if high == 0 and low == 0 and _failure == 0:
+            continue  # CAN frame padding
+        code = dtc_dec.decode_dtc(high, low)
+        records.append((code or f"{high:02X}{low:02X}", status))
+    return records
+
+
+def describe_response(request: str, response: UdsResponse) -> str:
+    """Human-readable one-liner for a positive response (panel + reports)."""
+    sid = response.sid
+    request = request.upper()
+    if sid == 0x62 and request.startswith("22") and len(request) >= 6:
+        # positive response echoes the 16-bit DID before the value
+        data = response.payload[2:] if len(response.payload) >= 2 else b""
+        return decode_did(int(request[2:6], 16), data)
+    if sid == 0x50:
+        session = response.payload[0] if response.payload else 0
+        return f"session {session:#04x} active"
+    if sid == 0x7E:
+        return "tester present acknowledged"
+    if sid == 0x59:
+        records = parse_dtc_records(response)
+        if records:
+            listed = ", ".join(f"{code} [{status:02X}]" for code, status in records[:10])
+            if len(records) > 10:
+                listed += f", … +{len(records) - 10} more"
+            return f"{len(records)} DTC(s): {listed}"
+        return response.payload.hex(" ").upper() or "positive, no data"
+    if response.payload and all(0x20 <= b <= 0x7E for b in response.payload):
+        return response.payload.decode("ascii")
+    return response.payload.hex(" ").upper() or "positive, no data"

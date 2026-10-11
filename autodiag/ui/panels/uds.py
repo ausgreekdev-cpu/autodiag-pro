@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from autodiag.obd import framing, uds
-from autodiag.obd.uds import KNOWN_DIDS, UdsError, UdsResponse, validate_request
+from autodiag.obd.uds import KNOWN_DIDS, UdsError, validate_request
 from autodiag.services.worker import ObdWorker
 
 _MAX_ROWS = 100
@@ -57,7 +57,21 @@ class UdsPanel(QWidget):
 
         addressing = QHBoxLayout()
         addressing.setSpacing(8)
-        addressing.addWidget(QLabel("ECU header:"))
+        addressing.addWidget(QLabel("ECU:"))
+        self._ecu_combo = QComboBox()
+        self._ecu_combo.setToolTip(
+            "Common physical request IDs — picks fill the header field"
+        )
+        for header, label in (
+            ("7E0", "7E0 (ECM)"),
+            ("7E1", "7E1 (TCM)"),
+            ("7E2", "7E2"),
+            ("7E4", "7E4"),
+        ):
+            self._ecu_combo.addItem(label, header)
+        self._ecu_combo.currentIndexChanged.connect(self._on_ecu_preset)
+        addressing.addWidget(self._ecu_combo)
+        addressing.addWidget(QLabel("Header:"))
         self._tx_edit = QLineEdit(uds.DEFAULT_TX_HEADER)
         self._tx_edit.setFixedWidth(64)
         self._tx_edit.setValidator(
@@ -85,6 +99,11 @@ class UdsPanel(QWidget):
             lambda: self._send(uds.read_dtc_by_status_mask())
         )
         presets.addWidget(self._dtc_btn)
+        self._supported_btn = QPushButton("Supported DTCs ($19 0A)")
+        self._supported_btn.clicked.connect(
+            lambda: self._send(uds.report_supported_dtc())
+        )
+        presets.addWidget(self._supported_btn)
         presets.addStretch(1)
         layout.addLayout(presets)
 
@@ -150,7 +169,7 @@ class UdsPanel(QWidget):
         if isinstance(result, UdsError):
             text = str(result)  # "requestOutOfRange (NRC 0x31 for service $22)"
         else:
-            text = self._decode(str(request), result)
+            text = uds.describe_response(str(request), result)
         self._table.insertRow(0)
         self._table.setItem(0, 0, QTableWidgetItem(datetime.now().strftime("%H:%M:%S")))
         self._table.setItem(0, 1, QTableWidgetItem(str(request).upper()))
@@ -196,13 +215,20 @@ class UdsPanel(QWidget):
             return
         self._rx_label.setText(f"→ {rx}")
 
+    def _on_ecu_preset(self, index: int) -> None:
+        header = self._ecu_combo.itemData(index)
+        if header:
+            self._tx_edit.setText(str(header))
+
     def _set_connected(self, connected: bool) -> None:
         self._connected = connected
         for widget in (
+            self._ecu_combo,
             self._tx_edit,
             self._session_btn,
             self._present_btn,
             self._dtc_btn,
+            self._supported_btn,
             self._did_combo,
             self._did_edit,
             self._did_btn,
@@ -212,20 +238,3 @@ class UdsPanel(QWidget):
             widget.setEnabled(connected)
         if not connected:
             self._status.setText("Connect to send UDS requests.")
-
-    @staticmethod
-    def _decode(request: str, response: UdsResponse) -> str:
-        if response.sid == 0x62 and request.startswith("22") and len(request) >= 6:
-            # positive response echoes the 16-bit DID before the value
-            data = response.payload[2:] if len(response.payload) >= 2 else b""
-            return uds.decode_did(int(request[2:6], 16), data)
-        if response.sid == 0x50:
-            session = response.payload[0] if response.payload else 0
-            return f"session {session:#04x} active"
-        if response.sid == 0x7E:
-            return "tester present acknowledged"
-        if response.sid == 0x59:
-            return f"DTC info: {response.payload.hex(' ').upper()}".rstrip()
-        if response.payload and all(0x20 <= b <= 0x7E for b in response.payload):
-            return response.payload.decode("ascii")
-        return response.payload.hex(" ").upper() or "positive, no data"

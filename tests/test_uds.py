@@ -104,3 +104,31 @@ def test_response_dataclass_is_immutable():
     response = UdsResponse(sid=0x62, payload=b"\x01", raw="62")
     with pytest.raises(FrozenInstanceError):
         response.sid = 0x50  # type: ignore[misc]
+
+
+def test_report_supported_dtc_builder():
+    assert uds.report_supported_dtc() == "190A"
+
+
+def test_parse_dtc_records_decodes_and_skips_padding():
+    response = uds.parse_response("5902FF01230008C123452F00000000")
+    assert uds.parse_dtc_records(response) == [("P0123", 0x08), ("U0123", 0x2F)]
+
+
+def test_parse_dtc_records_ignores_other_or_short_responses():
+    assert uds.parse_dtc_records(uds.parse_response("62F19041")) == []
+    assert uds.parse_dtc_records(uds.parse_response("5902")) == []
+
+
+def test_describe_response_dtc_vin_and_session():
+    dtc_response = uds.parse_response("5902FF01230008C123452F00000000")
+    assert (
+        uds.describe_response("1902FF", dtc_response)
+        == "2 DTC(s): P0123 [08], U0123 [2F]"
+    )
+    vin = uds.parse_response("62F1903144344750303052353642313233343537")
+    assert uds.describe_response("22F190", vin) == "1D4GP00R56B123457"
+    session = uds.parse_response("5003")
+    assert uds.describe_response("1003", session) == "session 0x03 active"
+    present = uds.parse_response("7E00")
+    assert uds.describe_response("3E00", present) == "tester present acknowledged"

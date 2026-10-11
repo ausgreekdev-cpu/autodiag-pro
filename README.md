@@ -66,9 +66,11 @@ port (USB cable or paired Bluetooth SPP dongle).
   beside the decoded value; *Force* sends unsupported PIDs too, and one click
   pins the parameter to the dashboard graph
 - **UDS (ISO 14229) requests** — read-only diagnostic services ($10 session,
-  $19 DTCs, $22 read-DID with VIN/ASCII decode, $3E tester present) against
-  any physical CAN ID (7E0, 7E1, …); custom hex is allowed, write/actuation
-  services are refused, and CAN headers are restored after every exchange
+  $19 DTCs with code/status decode, $22 read-DID with VIN/ASCII decode,
+  $3E tester present) against any physical CAN ID (7E0, 7E1, …); ECU presets
+  and custom hex are allowed, write/actuation services are refused, CAN
+  headers are restored after every exchange, and each request is recorded
+  in session history and the JSON/CSV/HTML reports
 - **Update check** — press *Check for updates* in Settings (or run
   `autodiag updates`) to compare against the latest GitHub release; one
   request, only when you ask
@@ -183,11 +185,13 @@ autodiag            # or: python -m autodiag
     dashboard value in amber, flash in the status bar and collect here with
     the time, value and limit; *Export CSV…* saves the history, and the
     thresholds themselves are remembered between launches.
-12. **UDS** — set the physical ECU header (the response ID follows TX + 8,
-    e.g. `7E0` → `7E8`), then send read-only ISO 14229 requests via the
-    preset buttons, the known-DID picker (VIN `F190` first) or raw hex;
-    results decode above the raw response, and write services ($2E/$31/$2F)
-    are refused before they reach the bus.
+12. **UDS** — pick an ECU preset (or set the physical header yourself; the
+    response ID follows TX + 8, e.g. `7E0` → `7E8`), then send read-only
+    ISO 14229 requests via the preset buttons, the known-DID picker (VIN
+    `F190` first) or raw hex; $19 responses decode to DTC + status, results
+    appear above the raw response, write services ($2E/$31/$2F) are refused
+    before they reach the bus, and every exchange is saved with the session
+    for history and reports.
 
 ## Command-line tools
 

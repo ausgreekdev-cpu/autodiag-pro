@@ -10,6 +10,7 @@ from autodiag.obd.elm327 import SessionInfo
 from autodiag.obd.mode05 import parse_tid_values
 from autodiag.obd.mode06 import parse_test_results
 from autodiag.obd.readiness import parse_monitor_status
+from autodiag.obd.uds import UdsError, parse_response
 from autodiag.services.export import (
     build_report,
     report_to_csv,
@@ -214,3 +215,46 @@ def test_record_ignores_unrelated_events():
     record.record_event("error", ("boom",))
     assert record.updated_at is None
     assert record.session is None
+
+
+def test_build_report_includes_uds_exchanges():
+    record = make_record()
+    response = parse_response("62F1903144344750303052353642313233343537")
+    error = UdsError(
+        "requestOutOfRange (NRC 0x31 for service $22)",
+        sid=0x22,
+        nrc=0x31,
+        raw="7F2231",
+    )
+    record.record_event("uds", (("22F190", response),))
+    record.record_event("uds", (("22F191", error),))
+
+    report = build_report(record, now=_NOW)
+    entries = report["uds"]
+    assert len(entries) == 2
+    assert entries[0]["ok"] is True
+    assert entries[0]["request"] == "22F190"
+    assert entries[0]["result"] == "1D4GP00R56B123457"
+    assert entries[0]["raw"] == "62F1903144344750303052353642313233343537"
+    assert entries[0]["time"]
+    assert entries[1]["ok"] is False
+    assert "requestOutOfRange" in entries[1]["result"]
+
+    html_doc = report_to_html(report)
+    assert "UDS requests" in html_doc
+    assert "22F190" in html_doc and "1D4GP00R56B123457" in html_doc
+    assert "requestOutOfRange" in html_doc
+    assert html.escape("7F2231") in html_doc
+
+    csv_text = report_to_csv(report)
+    assert "uds,22F190" in csv_text
+    assert "OK: 1D4GP00R56B123457" in csv_text
+    assert "ERR: requestOutOfRange" in csv_text
+
+    json.loads(report_to_json(report))  # stays JSON-serializable
+
+
+def test_report_omits_uds_section_when_no_requests():
+    report = build_report(make_record(), now=_NOW)
+    assert report["uds"] == []
+    assert "UDS requests" not in report_to_html(report)

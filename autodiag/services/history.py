@@ -193,6 +193,14 @@ def describe_report(report: dict[str, Any]) -> str:
         if len(live) > 12:
             lines.append(f"  … +{len(live) - 12} more")
 
+    uds_requests = report.get("uds") or []
+    if uds_requests:
+        failures = sum(1 for item in uds_requests if not item.get("ok"))
+        detail = f"UDS: {len(uds_requests)} request(s)"
+        if failures:
+            detail += f", {failures} negative response(s)"
+        lines.append(detail)
+
     live_log = report.get("live_log")
     if live_log:
         rows = int(live_log.get("rows") or 0)
@@ -210,4 +218,5 @@ def record_has_data(record: ScanRecord) -> bool:
         or record.mode06
         or record.freeze
         or record.pids
+        or record.uds
     )
