@@ -118,6 +118,7 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 22. Mode $05 compare + full PID registry (v0.17.0) | done |
 | 23. Single-file HTML diagnostic report (v0.18.0) | done |
 | 24. Freeze-frame compare (v0.18.0) | done |
+| 25. UDS read-only requests (v0.19.0) | done |
 
 ## Install & run
 
