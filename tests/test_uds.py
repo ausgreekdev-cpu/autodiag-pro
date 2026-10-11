@@ -132,3 +132,35 @@ def test_describe_response_dtc_vin_and_session():
     assert uds.describe_response("1003", session) == "session 0x03 active"
     present = uds.parse_response("7E00")
     assert uds.describe_response("3E00", present) == "tester present acknowledged"
+
+
+def test_write_service_builders():
+    assert uds.write_data_by_identifier(0xF190, b"ABC") == "2EF190414243"
+    with pytest.raises(ValueError):
+        uds.write_data_by_identifier(0xF190, b"")
+    assert uds.routine_control(0x01, 0x0001) == "31010001"
+    assert uds.routine_control(0x01, 0x0002, bytes.fromhex("AABB")) == "31010002AABB"
+    assert uds.io_control_by_identifier(0x0100, 0x03) == "2F010003"
+    assert uds.io_control_by_identifier(0x0100, 0x03, b"\x01") == "2F01000301"
+
+
+def test_validate_request_writes_need_the_waiver():
+    assert uds.validate_request("2EF19041", allow_writes=True) is None
+    assert uds.validate_request("31010001", allow_writes=True) is None
+    assert uds.validate_request("2F010003", allow_writes=True) is None
+
+    blocked = uds.validate_request("2EF19041")
+    assert blocked is not None and "waiver" in blocked
+
+    # unknown services stay refused even with the waiver
+    refused = uds.validate_request("14000000", allow_writes=True)
+    assert refused is not None and "$14" in refused
+
+
+def test_describe_response_write_positives():
+    written = uds.parse_response("6EF190")
+    assert uds.describe_response("2EF19041", written) == "DID F190 written"
+    routine = uds.parse_response("71010001")
+    assert uds.describe_response("31010001", routine) == "routine 0x01 acknowledged"
+    io = uds.parse_response("6F010003")
+    assert uds.describe_response("2F010003", io) == "DID 0100 control acknowledged"

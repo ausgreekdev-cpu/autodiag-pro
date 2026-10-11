@@ -1,4 +1,4 @@
-"""UDS panel: ISO 14229 read requests against a physical CAN ID."""
+"""UDS panel: ISO 14229 requests — reads free, writes behind a waiver."""
 
 from __future__ import annotations
 
@@ -7,11 +7,13 @@ from datetime import datetime
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -27,7 +29,7 @@ _MAX_ROWS = 100
 
 
 class UdsPanel(QWidget):
-    """Read-only UDS requests with decoded results and raw responses."""
+    """UDS requests with decoded results; write services need the waiver."""
 
     def __init__(self, worker: ObdWorker, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -49,8 +51,8 @@ class UdsPanel(QWidget):
         layout.addWidget(heading)
 
         hint = QLabel(
-            "Read-only services — session ($10), DTCs ($19), read DID ($22),\n"
-            "tester present ($3E). Writes and actuation are not allowed here."
+            "Read services — session ($10), DTCs ($19), read DID ($22),\n"
+            "tester present ($3E). Writes need the waiver below."
         )
         hint.setObjectName("subtle")
         layout.addWidget(hint)
@@ -138,6 +140,85 @@ class UdsPanel(QWidget):
         raw_row.addWidget(self._raw_btn)
         layout.addLayout(raw_row)
 
+        write_heading = QLabel("Write services — change ECU state")
+        write_heading.setObjectName("heading")
+        layout.addWidget(write_heading)
+
+        self._waiver_chk = QCheckBox(
+            "I understand writes can reprogram or disable ECUs — enable write services"
+        )
+        self._waiver_chk.toggled.connect(self._on_waiver_toggled)
+        layout.addWidget(self._waiver_chk)
+
+        write_row = QHBoxLayout()
+        write_row.setSpacing(8)
+        write_row.addWidget(QLabel("Write DID:"))
+        self._write_did_edit = QLineEdit()
+        self._write_did_edit.setPlaceholderText("F190")
+        self._write_did_edit.setFixedWidth(90)
+        self._write_did_edit.setValidator(
+            QRegularExpressionValidator(QRegularExpression("[0-9A-Fa-f]{4}"), self)
+        )
+        write_row.addWidget(self._write_did_edit)
+        self._write_data_edit = QLineEdit()
+        self._write_data_edit.setPlaceholderText("value bytes: e.g. 414243")
+        write_row.addWidget(self._write_data_edit, 1)
+        self._write_btn = QPushButton("Write $2E")
+        self._write_btn.clicked.connect(self._on_write_did)
+        write_row.addWidget(self._write_btn)
+        layout.addLayout(write_row)
+
+        routine_row = QHBoxLayout()
+        routine_row.setSpacing(8)
+        routine_row.addWidget(QLabel("Routine $31:"))
+        self._routine_type_combo = QComboBox()
+        for label, control_type in (
+            ("Start (01)", 0x01),
+            ("Stop (02)", 0x02),
+            ("Results (03)", 0x03),
+        ):
+            self._routine_type_combo.addItem(label, control_type)
+        routine_row.addWidget(self._routine_type_combo)
+        self._routine_id_edit = QLineEdit()
+        self._routine_id_edit.setPlaceholderText("id: 0001")
+        self._routine_id_edit.setFixedWidth(90)
+        self._routine_id_edit.setValidator(
+            QRegularExpressionValidator(QRegularExpression("[0-9A-Fa-f]{4}"), self)
+        )
+        routine_row.addWidget(self._routine_id_edit)
+        self._routine_params_edit = QLineEdit()
+        self._routine_params_edit.setPlaceholderText("params (optional hex)")
+        routine_row.addWidget(self._routine_params_edit, 1)
+        self._routine_btn = QPushButton("Send")
+        self._routine_btn.clicked.connect(self._on_routine)
+        routine_row.addWidget(self._routine_btn)
+        layout.addLayout(routine_row)
+
+        io_row = QHBoxLayout()
+        io_row.setSpacing(8)
+        io_row.addWidget(QLabel("IO control $2F:"))
+        self._io_did_edit = QLineEdit()
+        self._io_did_edit.setPlaceholderText("DID")
+        self._io_did_edit.setFixedWidth(90)
+        self._io_did_edit.setValidator(
+            QRegularExpressionValidator(QRegularExpression("[0-9A-Fa-f]{4}"), self)
+        )
+        io_row.addWidget(self._io_did_edit)
+        self._io_param_edit = QLineEdit("03")
+        self._io_param_edit.setPlaceholderText("param")
+        self._io_param_edit.setFixedWidth(56)
+        self._io_param_edit.setValidator(
+            QRegularExpressionValidator(QRegularExpression("[0-9A-Fa-f]{2}"), self)
+        )
+        io_row.addWidget(self._io_param_edit)
+        self._io_data_edit = QLineEdit()
+        self._io_data_edit.setPlaceholderText("data (optional hex)")
+        io_row.addWidget(self._io_data_edit, 1)
+        self._io_btn = QPushButton("Send")
+        self._io_btn.clicked.connect(self._on_io_control)
+        io_row.addWidget(self._io_btn)
+        layout.addLayout(io_row)
+
         self._status = QLabel("Connect to send UDS requests.")
         self._status.setObjectName("subtle")
         layout.addWidget(self._status)
@@ -183,7 +264,9 @@ class UdsPanel(QWidget):
     # -- interactions ----------------------------------------------------------
 
     def _send(self, hex_request: str) -> None:
-        message = validate_request(hex_request)
+        message = validate_request(
+            hex_request, allow_writes=self._waiver_chk.isChecked()
+        )
         if message is not None:
             self._status.setText(message)
             return
@@ -194,6 +277,19 @@ class UdsPanel(QWidget):
             self._status.setText("ECU header must be 1–3 hex digits (e.g. 7E0).")
             return
         normalized = "".join(hex_request.split()).upper()
+        if int(normalized[:2], 16) in uds.WRITE_SERVICES:
+            answer = QMessageBox.warning(
+                self,
+                "Confirm write",
+                f"Send ${normalized} to {tx}?\n\n"
+                "Write services can reprogram or disable ECUs. Only continue "
+                "with values verified against factory documentation.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                self._status.setText("Write cancelled.")
+                return
         self._status.setText(f"Sending ${normalized[:2]} to {tx}…")
         self._worker.uds_request(normalized, tx=tx)
 
@@ -208,6 +304,53 @@ class UdsPanel(QWidget):
     def _on_send_raw(self) -> None:
         self._send(self._raw_edit.text())
 
+    def _on_write_did(self) -> None:
+        did_text = self._write_did_edit.text().strip()
+        if len(did_text) != 4:
+            self._status.setText("Write DID must be 4 hex digits (e.g. F190).")
+            return
+        data = self._hex_bytes(self._write_data_edit.text(), "Write value")
+        if data is None:
+            return
+        if not data:
+            self._status.setText("Write value needs at least one data byte.")
+            return
+        self._send(uds.write_data_by_identifier(int(did_text, 16), data))
+
+    def _on_routine(self) -> None:
+        routine_text = self._routine_id_edit.text().strip()
+        if len(routine_text) != 4:
+            self._status.setText("Routine ID must be 4 hex digits (e.g. 0001).")
+            return
+        params = self._hex_bytes(self._routine_params_edit.text(), "Routine params")
+        if params is None:
+            return
+        control_type = int(self._routine_type_combo.currentData())
+        self._send(uds.routine_control(control_type, int(routine_text, 16), params))
+
+    def _on_io_control(self) -> None:
+        did_text = self._io_did_edit.text().strip()
+        if len(did_text) != 4:
+            self._status.setText("IO DID must be 4 hex digits.")
+            return
+        param_text = self._io_param_edit.text().strip()
+        if len(param_text) != 2:
+            self._status.setText("IO control parameter must be 2 hex digits.")
+            return
+        data = self._hex_bytes(self._io_data_edit.text(), "IO data")
+        if data is None:
+            return
+        self._send(
+            uds.io_control_by_identifier(int(did_text, 16), int(param_text, 16), data)
+        )
+
+    def _hex_bytes(self, text: str, label: str) -> bytes | None:
+        cleaned = "".join(text.split()).upper()
+        if len(cleaned) % 2 or any(c not in "0123456789ABCDEF" for c in cleaned):
+            self._status.setText(f"{label} must be whole hex bytes (e.g. 01A2FF).")
+            return None
+        return bytes.fromhex(cleaned) if cleaned else b""
+
     def _on_tx_changed(self, text: str) -> None:
         try:
             rx = uds.response_header(text or uds.DEFAULT_TX_HEADER)
@@ -219,6 +362,23 @@ class UdsPanel(QWidget):
         header = self._ecu_combo.itemData(index)
         if header:
             self._tx_edit.setText(str(header))
+
+    def _on_waiver_toggled(self, checked: bool) -> None:
+        write_enabled = self._connected and checked
+        for widget in (
+            self._write_did_edit,
+            self._write_data_edit,
+            self._write_btn,
+            self._routine_type_combo,
+            self._routine_id_edit,
+            self._routine_params_edit,
+            self._routine_btn,
+            self._io_did_edit,
+            self._io_param_edit,
+            self._io_data_edit,
+            self._io_btn,
+        ):
+            widget.setEnabled(write_enabled)
 
     def _set_connected(self, connected: bool) -> None:
         self._connected = connected
@@ -234,7 +394,9 @@ class UdsPanel(QWidget):
             self._did_btn,
             self._raw_edit,
             self._raw_btn,
+            self._waiver_chk,
         ):
             widget.setEnabled(connected)
+        self._on_waiver_toggled(self._waiver_chk.isChecked())
         if not connected:
             self._status.setText("Connect to send UDS requests.")

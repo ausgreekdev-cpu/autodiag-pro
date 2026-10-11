@@ -3,9 +3,9 @@
 Requests ride the existing ELM327 serial link as raw hex (like ``0100``);
 physical addressing wraps the exchange in ``AT SH``/``AT CRA`` — the engine
 job restores the functional default afterwards so normal OBD polling is
-unaffected. Only read-oriented services are accepted here: write and
-bi-directional services ($2E/$31/$2F) are a deliberate later milestone that
-needs explicit safety warnings first.
+unaffected. Read services are free to send; write/bi-directional services
+($2E/$31/$2F) exist but are gated behind an explicit waiver and per-send
+confirmation in the panel — they change ECU state.
 """
 
 from __future__ import annotations
@@ -45,8 +45,12 @@ NEGATIVE_SID = 0x7F
 POSITIVE_MIN = 0x40
 POSITIVE_MAX = 0x7E
 
-#: Services this milestone permits — reads only, no writes or actuation.
+#: Services permitted without the write waiver — reads only.
 READ_ONLY_SERVICES = frozenset({0x10, 0x19, 0x22, 0x3E})
+
+#: Services that change ECU state — allowed only with the panel waiver ticked
+#: and a per-send confirmation dialog. Nothing else blocks them.
+WRITE_SERVICES = frozenset({0x2E, 0x31, 0x2F})
 
 #: ISO 15765-4 11-bit physical header for the first ECU; responses come from
 #: TX + 8 (``7E0`` → ``7E8``). Editable per ECU in the panel.
@@ -122,29 +126,51 @@ def report_supported_dtc() -> str:
     return "190A"
 
 
+def write_data_by_identifier(did: int, data: bytes) -> str:
+    """``$2E`` WriteDataByIdentifier — DID plus raw value bytes."""
+    if not data:
+        raise ValueError("at least one data byte is required")
+    return f"2E{did:04X}" + data.hex().upper()
+
+
+def routine_control(control_type: int, routine_id: int, parameters: bytes = b"") -> str:
+    """``$31`` RoutineControl — control type (0x01 start, 0x02 stop, 0x03 results)."""
+    return f"31{control_type:02X}{routine_id:04X}" + parameters.hex().upper()
+
+
+def io_control_by_identifier(did: int, control_param: int, data: bytes = b"") -> str:
+    """``$2F`` IOControlByIdentifier — control parameter plus optional data."""
+    return f"2F{did:04X}{control_param:02X}" + data.hex().upper()
+
+
 def response_header(tx_header: str) -> str:
     """Expected response ID for a transmit header (TX + 8 on CAN 11-bit)."""
     return f"{int(tx_header, 16) + 8:03X}"
 
 
-def validate_request(hex_request: str) -> str | None:
+def validate_request(hex_request: str, *, allow_writes: bool = False) -> str | None:
     """Guard for raw requests: message when it must not be sent (None = ok).
 
-    Enforces the read-only service whitelist — write/actuation services are
-    rejected before they ever reach the bus.
+    Read services always pass; write services ($2E/$31/$2F) pass only with
+    ``allow_writes`` (the panel's waiver checkbox). Everything else is
+    refused before it ever reaches the bus.
     """
     cleaned = "".join(hex_request.split()).upper()
     if not cleaned or len(cleaned) % 2 or any(c not in "0123456789ABCDEF" for c in cleaned):
         return "Request must be an even number of hex digits (e.g. 22F190)."
     sid = int(cleaned[:2], 16)
-    if sid not in READ_ONLY_SERVICES:
-        label = {
-            0x2E: "WriteDataByIdentifier",
-            0x31: "RoutineControl",
-            0x2F: "IOControlByIdentifier",
-        }.get(sid, f"service ${sid:02X}")
-        return f"{label} writes or actuates — only read services are allowed here."
-    return None
+    if sid in READ_ONLY_SERVICES:
+        return None
+    label = {
+        0x2E: "WriteDataByIdentifier",
+        0x31: "RoutineControl",
+        0x2F: "IOControlByIdentifier",
+    }.get(sid, f"service ${sid:02X}")
+    if sid in WRITE_SERVICES and allow_writes:
+        return None
+    if sid in WRITE_SERVICES:
+        return f"{label} writes or actuates — enable the waiver to allow it."
+    return f"{label} writes or actuates — only read services are allowed here."
 
 
 # -- response parsing ----------------------------------------------------------
@@ -233,6 +259,15 @@ def describe_response(request: str, response: UdsResponse) -> str:
                 listed += f", … +{len(records) - 10} more"
             return f"{len(records)} DTC(s): {listed}"
         return response.payload.hex(" ").upper() or "positive, no data"
+    if sid == 0x6E and len(response.payload) >= 2:
+        did = int.from_bytes(response.payload[:2], "big")
+        return f"DID {did:04X} written"
+    if sid == 0x71:
+        control = response.payload[0] if response.payload else 0
+        return f"routine {control:#04x} acknowledged"
+    if sid == 0x6F and len(response.payload) >= 2:
+        did = int.from_bytes(response.payload[:2], "big")
+        return f"DID {did:04X} control acknowledged"
     if response.payload and all(0x20 <= b <= 0x7E for b in response.payload):
         return response.payload.decode("ascii")
     return response.payload.hex(" ").upper() or "positive, no data"

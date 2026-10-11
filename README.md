@@ -68,9 +68,10 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **UDS (ISO 14229) requests** — read-only diagnostic services ($10 session,
   $19 DTCs with code/status decode, $22 read-DID with VIN/ASCII decode,
   $3E tester present) against any physical CAN ID (7E0, 7E1, …); ECU presets
-  and custom hex are allowed, write/actuation services are refused, CAN
-  headers are restored after every exchange, and each request is recorded
-  in session history and the JSON/CSV/HTML reports
+  and custom hex are allowed, CAN headers are restored after every exchange,
+  and each request is recorded in session history and the JSON/CSV/HTML
+  reports. Write services ($2E/$31/$2F) exist but stay behind an explicit
+  waiver checkbox and a per-send confirmation dialog
 - **Update check** — press *Check for updates* in Settings (or run
   `autodiag updates`) to compare against the latest GitHub release; one
   request, only when you ask
@@ -190,9 +191,10 @@ autodiag            # or: python -m autodiag
     response ID follows TX + 8, e.g. `7E0` → `7E8`), then send read-only
     ISO 14229 requests via the preset buttons, the known-DID picker (VIN
     `F190` first) or raw hex; $19 responses decode to DTC + status, results
-    appear above the raw response, write services ($2E/$31/$2F) are refused
-    before they reach the bus, and every exchange is saved with the session
-    for history and reports.
+    appear above the raw response, and every exchange is saved with the
+    session for history and reports. Write services ($2E write DID, $31
+    routine, $2F IO control) unlock only after ticking the waiver checkbox,
+    and every write still asks for a final confirmation
 
 ## Command-line tools
 

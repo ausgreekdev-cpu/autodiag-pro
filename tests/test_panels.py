@@ -1216,3 +1216,95 @@ def test_uds_response_row_count_is_capped(qapp):
     for i in range(105):
         worker.uds.emit(("22F190", UdsResponse(0x62, bytes([i % 256]), "62")))
     assert panel._table.rowCount() == 100
+
+
+def _patch_confirm(monkeypatch, answer):
+    from PySide6.QtWidgets import QMessageBox
+
+    class _FakeBox:
+        StandardButton = QMessageBox.StandardButton
+
+        @staticmethod
+        def warning(*_args, **_kwargs):
+            return answer
+
+    monkeypatch.setattr("autodiag.ui.panels.uds.QMessageBox", _FakeBox)
+
+
+def test_uds_panel_write_widgets_gate_on_waiver(qapp):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+
+    assert panel._waiver_chk.isEnabled()
+    assert not panel._write_btn.isEnabled()
+    assert not panel._routine_btn.isEnabled()
+    assert not panel._io_btn.isEnabled()
+
+    panel._waiver_chk.setChecked(True)
+    assert panel._write_btn.isEnabled()
+    assert panel._routine_btn.isEnabled()
+    assert panel._io_btn.isEnabled()
+
+    panel._waiver_chk.setChecked(False)
+    assert not panel._write_btn.isEnabled()
+
+    panel._waiver_chk.setChecked(True)
+    panel._set_connected(False)
+    assert not panel._write_btn.isEnabled()  # offline beats the waiver
+
+
+def test_uds_panel_write_requires_confirmation(qapp, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    panel._waiver_chk.setChecked(True)
+    sent: list[str] = []
+    monkeypatch.setattr(worker, "uds_request", lambda req, **_kw: sent.append(req))
+
+    panel._write_did_edit.setText("F190")
+    panel._write_data_edit.setText("4142")
+
+    _patch_confirm(monkeypatch, QMessageBox.StandardButton.No)
+    panel._write_btn.click()
+    assert sent == []
+    assert "cancelled" in panel._status.text()
+
+    _patch_confirm(monkeypatch, QMessageBox.StandardButton.Yes)
+    panel._write_btn.click()
+    assert sent == ["2EF1904142"]
+
+
+def test_uds_panel_routine_and_io_build_hex(qapp, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    panel._waiver_chk.setChecked(True)
+    sent: list[str] = []
+    monkeypatch.setattr(worker, "uds_request", lambda req, **_kw: sent.append(req))
+    _patch_confirm(monkeypatch, QMessageBox.StandardButton.Yes)
+
+    panel._routine_id_edit.setText("0001")  # Start (01) is the default type
+    panel._routine_btn.click()
+    assert sent == ["31010001"]
+
+    panel._io_did_edit.setText("0100")  # param defaults to 03, data empty
+    panel._io_btn.click()
+    assert sent[-1] == "2F010003"
+
+
+def test_uds_panel_raw_write_blocked_without_waiver(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    sent: list[str] = []
+    monkeypatch.setattr(worker, "uds_request", lambda req, **_kw: sent.append(req))
+
+    panel._raw_edit.setText("2EF19041")
+    panel._raw_btn.click()
+    assert sent == []
+    assert "waiver" in panel._status.text()
