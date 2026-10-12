@@ -90,6 +90,37 @@ jobs:
           path: dist/${{ matrix.artifact }}
           if-no-files-found: error
 
+  # Microsoft Store package (private artifact — not attached to the public
+  # release; upload the .msix to Partner Center per docs/store/STORE.md).
+  # Identity comes from repo secrets once a Partner Center account exists;
+  # until then the script warns and stages a placeholder identity.
+  package-msix:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install packaging tools
+        run: pip install pillow
+      - uses: actions/download-artifact@v8
+        with:
+          name: autodiag-windows-x86_64.exe
+          path: dist
+      - name: Build MSIX package
+        shell: pwsh
+        env:
+          MSIX_PACKAGE_NAME: ${{ secrets.MSIX_PACKAGE_NAME }}
+          MSIX_PUBLISHER: ${{ secrets.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY: ${{ secrets.MSIX_PUBLISHER_DISPLAY }}
+        run: python packaging/msix/build_msix.py --dist dist/autodiag-windows-x86_64.exe --out out --pack
+      - uses: actions/upload-artifact@v7
+        with:
+          name: autodiag-msix
+          path: out/*.msix
+          if-no-files-found: error
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
