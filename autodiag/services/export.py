@@ -145,6 +145,7 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
         "mode06": mode06,
         "mode05": mode05,
         "uds": uds,
+        "work_order": {},
         "live_data": pids,
     }
     if record.log_file:
@@ -228,6 +229,10 @@ def report_to_csv(report: dict[str, Any]) -> str:
             str(item.get("time") or ""),
             f"{outcome}: {item.get('result') or ''}",
         )
+
+    for field, value in (report.get("work_order") or {}).items():
+        if value:
+            add("work_order", field, "", value)
 
     live_log = report.get("live_log")
     if live_log:
@@ -380,6 +385,22 @@ def report_to_html(report: dict[str, Any]) -> str:
         f'<div class="col"><h2>Vehicle</h2>{table(["Field", "Value"], vehicle_rows)}</div>'
         "</section>"
     )
+
+    work_order = report.get("work_order") or {}
+    if any(work_order.values()):
+        labels = {
+            "customer": "Customer",
+            "phone": "Phone",
+            "mileage": "Mileage",
+            "job": "Job",
+            "notes": "Notes",
+        }
+        rows = [
+            [h(labels.get(field, field)), h(value)]
+            for field, value in work_order.items()
+            if value
+        ]
+        parts.append(section("Work order", table(["Field", "Value"], rows)))
 
     if readiness:
         mil = badge(
@@ -538,6 +559,11 @@ def report_text(report: dict[str, Any], suffix: str) -> str:
         return report_to_csv(report)
     if suffix == ".html":
         return report_to_html(report)
+    if suffix == ".pdf":
+        raise ValueError(
+            "PDF export is available in the app (Settings or History) — "
+            "on the command line use .html, .json or .csv instead"
+        )
     return report_to_json(report)
 
 

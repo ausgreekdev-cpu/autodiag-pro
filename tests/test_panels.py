@@ -1308,3 +1308,90 @@ def test_uds_panel_raw_write_blocked_without_waiver(qapp, monkeypatch):
     panel._raw_btn.click()
     assert sent == []
     assert "waiver" in panel._status.text()
+
+
+def test_work_order_dialog_roundtrip(qapp):
+    from autodiag.ui.work_order import WorkOrderDialog
+
+    dialog = WorkOrderDialog()
+    assert dialog.values() == {
+        "customer": "",
+        "phone": "",
+        "mileage": "",
+        "job": "",
+        "notes": "",
+    }
+    dialog._customer.setText("  Sam Rivera ")
+    dialog._job.setPlainText(" Misfire\n diagnosis ")
+    values = dialog.values()
+    assert values["customer"] == "Sam Rivera"
+    assert values["job"] == "Misfire\n diagnosis"
+
+    prefilled = WorkOrderDialog({"customer": "Sam", "mileage": "123"})
+    assert prefilled.values()["customer"] == "Sam"
+    assert prefilled.values()["mileage"] == "123"
+    assert prefilled.values()["phone"] == ""
+
+
+def test_history_panel_work_order_saves_into_session(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QDialog
+
+    store = _history_store(tmp_path)
+    panel = HistoryPanel(store)
+    panel.refresh()
+    panel._table.selectRow(0)
+
+    class _StubDialog:
+        def __init__(self, values, parent=None):
+            assert values == {}  # fresh session has no work order yet
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+        def values(self):
+            return {"customer": "Sam Rivera", "job": "Misfire diagnosis"}
+
+    monkeypatch.setattr("autodiag.ui.panels.history.WorkOrderDialog", _StubDialog)
+    panel._work_order_btn.click()
+
+    assert panel._selected is not None
+    report = store.load(panel._selected)
+    assert report is not None
+    assert report["work_order"]["customer"] == "Sam Rivera"
+    assert "Customer: Sam Rivera" in panel._detail.toPlainText()
+
+
+def test_history_panel_export_pdf_writes_file(qapp, tmp_path, monkeypatch):
+    store = _history_store(tmp_path)
+    panel = HistoryPanel(store)
+    panel.refresh()
+    panel._table.selectRow(0)
+    target = tmp_path / "session.pdf"
+    monkeypatch.setattr(
+        "autodiag.ui.panels.history.QFileDialog.getSaveFileName",
+        lambda *args, **kwargs: (str(target), ""),
+    )
+    panel._export_pdf_btn.click()
+    assert target.exists()
+    assert target.read_bytes()[:4] == b"%PDF"
+
+
+def test_history_panel_export_buttons_enable_with_selection(qapp, tmp_path):
+    store = _history_store(tmp_path)
+    panel = HistoryPanel(store)
+    panel.refresh()
+    assert not panel._export_html_btn.isEnabled()
+    assert not panel._export_pdf_btn.isEnabled()
+    assert not panel._work_order_btn.isEnabled()
+
+    panel._table.selectRow(0)
+    assert panel._export_html_btn.isEnabled()
+    assert panel._export_pdf_btn.isEnabled()
+    assert panel._work_order_btn.isEnabled()
+
+
+def test_settings_panel_exports_pdf(qapp, tmp_path):
+    panel = SettingsPanel(make_record(), lambda _msg: None)
+    target = panel.export_to(tmp_path / "scan.pdf")
+    assert target.exists()
+    assert target.read_bytes()[:4] == b"%PDF"

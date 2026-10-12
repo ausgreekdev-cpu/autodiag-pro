@@ -83,6 +83,16 @@ class SessionStore:
         target.write_text(report_text(report, target.suffix.lower()), encoding="utf-8")
         return target
 
+    def update(self, name: str, report: dict[str, Any]) -> Path | None:
+        """Rewrite a stored session in place (e.g. after editing a work order)."""
+        path = self._safe_path(name)
+        if path is None or not path.exists():
+            return None
+        path.write_text(
+            json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        return path
+
     def delete(self, name: str) -> bool:
         path = self._safe_path(name)
         if path is None:
@@ -151,6 +161,13 @@ def describe_report(report: dict[str, Any]) -> str:
         lines.append(f"VIN: {vehicle['vin']}")
     for cal in vehicle.get("calibration_ids") or []:
         lines.append(f"Cal ID: {cal}")
+
+    work_order = report.get("work_order") or {}
+    if any(work_order.values()):
+        if work_order.get("customer"):
+            lines.append(f"Customer: {work_order['customer']}")
+        if work_order.get("job"):
+            lines.append(f"Job: {work_order['job']}")
 
     readiness = report.get("readiness")
     if readiness:

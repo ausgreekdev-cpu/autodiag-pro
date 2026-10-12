@@ -6,6 +6,8 @@ import html
 import json
 from datetime import UTC, datetime
 
+import pytest
+
 from autodiag.obd.elm327 import SessionInfo
 from autodiag.obd.mode05 import parse_tid_values
 from autodiag.obd.mode06 import parse_test_results
@@ -13,6 +15,7 @@ from autodiag.obd.readiness import parse_monitor_status
 from autodiag.obd.uds import UdsError, parse_response
 from autodiag.services.export import (
     build_report,
+    report_text,
     report_to_csv,
     report_to_html,
     report_to_json,
@@ -258,3 +261,33 @@ def test_report_omits_uds_section_when_no_requests():
     report = build_report(make_record(), now=_NOW)
     assert report["uds"] == []
     assert "UDS requests" not in report_to_html(report)
+
+
+def test_work_order_section_and_csv_rows():
+    report = build_report(make_record(), now=_NOW)
+    assert report["work_order"] == {}
+    assert "Work order" not in report_to_html(report)
+
+    report["work_order"] = {
+        "customer": "Sam Rivera",
+        "phone": "555-0100",
+        "mileage": "184220",
+        "job": "Check engine light",
+        "notes": "",
+    }
+    html_doc = report_to_html(report)
+    assert "Work order" in html_doc
+    assert "Sam Rivera" in html_doc and "Check engine light" in html_doc
+    assert "555-0100" in html_doc
+
+    csv_text = report_to_csv(report)
+    assert "work_order,customer" in csv_text
+    assert "work_order,job" in csv_text
+    assert "work_order,notes" not in csv_text  # empty fields omitted
+
+
+def test_report_text_rejects_pdf_suffix():
+    report = build_report(make_record(), now=_NOW)
+    with pytest.raises(ValueError) as excinfo:
+        report_text(report, ".pdf")
+    assert "app" in str(excinfo.value)

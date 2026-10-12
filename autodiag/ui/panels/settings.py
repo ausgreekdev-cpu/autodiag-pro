@@ -20,14 +20,21 @@ from PySide6.QtWidgets import (
 from autodiag import __version__
 from autodiag.obd.dictionary import load_dictionary
 from autodiag.services import update_check
-from autodiag.services.export import write_report
+from autodiag.services.export import build_report, write_report
 from autodiag.services.record import ScanRecord
+from autodiag.ui.pdf import write_report_pdf
 from autodiag.ui.prefs import PROTOCOL_CHOICES, Prefs
 
 _JSON_FILTER = "JSON report (*.json)"
 _CSV_FILTER = "CSV report (*.csv)"
 _HTML_FILTER = "HTML report (*.html)"
-_EXPORT_FILTERS = {"json": _JSON_FILTER, "csv": _CSV_FILTER, "html": _HTML_FILTER}
+_PDF_FILTER = "PDF report (*.pdf)"
+_EXPORT_FILTERS = {
+    "json": _JSON_FILTER,
+    "csv": _CSV_FILTER,
+    "html": _HTML_FILTER,
+    "pdf": _PDF_FILTER,
+}
 
 
 class UpdateCheckWorker(QThread):
@@ -110,6 +117,9 @@ class SettingsPanel(QWidget):
         self._html_btn = QPushButton("Export HTML…")
         self._html_btn.clicked.connect(lambda: self.export_with_dialog("html"))
         buttons.addWidget(self._html_btn)
+        self._pdf_btn = QPushButton("Export PDF…")
+        self._pdf_btn.clicked.connect(lambda: self.export_with_dialog("pdf"))
+        buttons.addWidget(self._pdf_btn)
         buttons.addStretch(1)
         report_layout.addLayout(buttons)
 
@@ -209,7 +219,10 @@ class SettingsPanel(QWidget):
         target = Path(path)
         if not target.suffix:
             target = target.with_suffix(".json")
-        write_report(self._record, target)
+        if target.suffix.lower() == ".pdf":
+            write_report_pdf(build_report(self._record), target)
+        else:
+            write_report(self._record, target)
         message = f"Report written to {target}"
         self._export_label.setText(message)
         self._on_message(message)

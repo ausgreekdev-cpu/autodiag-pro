@@ -38,8 +38,9 @@ port (USB cable or paired Bluetooth SPP dongle).
   min/max limits the ECU used, PASS/FAIL), with an *Only failures* filter
 - **Mode $05** — oxygen-sensor monitor test results for non-CAN buses
   (ISO 9141 / J1850 / KWP; on CAN these tests surface in Mode $06)
-- **Reports** — export everything collected to JSON, CSV, or a single
-  shareable HTML page
+- **Reports** — export everything collected to JSON, CSV, a single
+  shareable HTML page, or a print-ready PDF (rendered offline from the
+  same HTML — no cloud services)
 - **Resilient link** — if the adapter drops mid-session the app reconnects by itself
   (1–15 s backoff, up to 5 attempts) with live status in the window
 - **Remembers your setup** — last port, poll interval, panel and window layout are
@@ -52,7 +53,8 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **Every ECU's codes** — multi-ECU mode $03/$07/$0A replies are parsed per
   message, so a second ECU never produces phantom DTCs
 - **Session history** — every scan auto-saves to disk on close (last 50 kept);
-  browse, preview, re-export as JSON/CSV/HTML, or delete
+  browse, preview, re-export as JSON/CSV/HTML/PDF, attach a work order
+  (customer, phone, mileage, job, notes) to any session, or delete
 - **Time-series CSV logs** — every polled value streams into a timestamped CSV
   (*Log*, on by default; newest 50 kept) and the matching history session links
   back to it
@@ -165,13 +167,15 @@ autodiag            # or: python -m autodiag
    has its own read button; results stay available for the report. The freeze-frame
    panel can read any of frames 0–2 and keeps each frame cached for comparison.
 7. **Settings** — export the whole session (VIN, codes, monitors, Mode $05/$06,
-   latest readings) as JSON, CSV or HTML, pin the OBD protocol if auto-detection fails or
+   latest readings) as JSON, CSV, HTML or PDF, pin the OBD protocol if auto-detection fails or
    picks the wrong one, or press *Check for updates* to compare the running version
    with
    the latest GitHub release.
 8. **History** — past sessions appear here automatically when you close the app
-   (the newest 50 are kept). Select one to preview it, re-export it as JSON/CSV/HTML,
-   or delete it; the *Log* column shows which sessions have a CSV time series,
+   (the newest 50 are kept). Select one to preview it, re-export it as
+   JSON/CSV/HTML/PDF, attach a *Work order…* (customer, phone, mileage, job and
+   notes stored with the session and shown in every export), or delete it; the
+   *Log* column shows which sessions have a CSV time series,
    and *View log…* opens one straight in the Log viewer. *Compare…* opens two
    sessions side by side — codes gained/lost, readiness flips, test changes
    and value deltas — defaulting to your selection against the newest other
@@ -218,6 +222,8 @@ autodiag updates              # compare against the latest GitHub release
   live PIDs (`--pids`, default `0C,0D,05`) for `--seconds` (default 5) at
   `--interval` and writes the report. `--device` picks the port (defaults to the
   only port present); output defaults to `autodiag-scan-<timestamp>.json`.
+  `-o path.html|csv|json` picks the format — PDF export lives in the app
+  (Settings or History), not the CLI.
 - **updates** — one GitHub API request; prints the newer release (with URL) or
   "You're up to date". Exit code 0 = checked, 1 = the check failed.
 

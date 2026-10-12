@@ -7,6 +7,7 @@ from datetime import datetime
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
@@ -23,12 +24,20 @@ from PySide6.QtWidgets import (
 
 from autodiag.services.history import SessionStore, describe_report
 from autodiag.ui.compare_dialog import CompareDialog
+from autodiag.ui.pdf import write_report_pdf
+from autodiag.ui.work_order import WorkOrderDialog
 
 _COLUMNS = ("Date", "VIN", "DTCs", "Mode $06", "PIDs", "Adapter", "Log")
 _JSON_FILTER = "JSON report (*.json)"
 _CSV_FILTER = "CSV report (*.csv)"
 _HTML_FILTER = "HTML report (*.html)"
-_EXPORT_FILTERS = {".json": _JSON_FILTER, ".csv": _CSV_FILTER, ".html": _HTML_FILTER}
+_PDF_FILTER = "PDF report (*.pdf)"
+_EXPORT_FILTERS = {
+    ".json": _JSON_FILTER,
+    ".csv": _CSV_FILTER,
+    ".html": _HTML_FILTER,
+    ".pdf": _PDF_FILTER,
+}
 
 
 class HistoryPanel(QWidget):
@@ -56,22 +65,28 @@ class HistoryPanel(QWidget):
         actions = QHBoxLayout()
         self._compare_btn = QPushButton("Compare…")
         self._view_log_btn = QPushButton("View log…")
+        self._work_order_btn = QPushButton("Work order…")
         self._export_json_btn = QPushButton("Export JSON…")
         self._export_csv_btn = QPushButton("Export CSV…")
         self._export_html_btn = QPushButton("Export HTML…")
+        self._export_pdf_btn = QPushButton("Export PDF…")
         self._delete_btn = QPushButton("Delete")
         self._compare_btn.clicked.connect(self._open_compare)
         self._view_log_btn.clicked.connect(self._on_view_log)
+        self._work_order_btn.clicked.connect(self._on_work_order)
         self._export_json_btn.clicked.connect(lambda: self._export(".json"))
         self._export_csv_btn.clicked.connect(lambda: self._export(".csv"))
         self._export_html_btn.clicked.connect(lambda: self._export(".html"))
+        self._export_pdf_btn.clicked.connect(lambda: self._export(".pdf"))
         self._delete_btn.clicked.connect(self._delete)
         for button in (
             self._compare_btn,
             self._view_log_btn,
+            self._work_order_btn,
             self._export_json_btn,
             self._export_csv_btn,
             self._export_html_btn,
+            self._export_pdf_btn,
             self._delete_btn,
         ):
             button.setEnabled(False)
@@ -190,8 +205,27 @@ class HistoryPanel(QWidget):
             default,
             _EXPORT_FILTERS.get(suffix, _JSON_FILTER),
         )
-        if path:
+        if not path:
+            return
+        if suffix == ".pdf":
+            report = self._store.load(self._selected)
+            if report is not None:
+                write_report_pdf(report, path)
+        else:
             self._store.export(self._selected, path)
+
+    def _on_work_order(self) -> None:
+        if self._selected is None:
+            return
+        report = self._store.load(self._selected)
+        if report is None:
+            return
+        dialog = WorkOrderDialog(report.get("work_order"), parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        report["work_order"] = dialog.values()
+        self._store.update(self._selected, report)
+        self._detail.setPlainText(describe_report(report))
 
     def _delete(self) -> None:
         if self._selected is None:
@@ -217,8 +251,11 @@ class HistoryPanel(QWidget):
 
     def _set_buttons_enabled(self, enabled: bool) -> None:
         self._view_log_btn.setEnabled(enabled and bool(self._selected_log))
+        self._work_order_btn.setEnabled(enabled)
         self._export_json_btn.setEnabled(enabled)
         self._export_csv_btn.setEnabled(enabled)
+        self._export_html_btn.setEnabled(enabled)
+        self._export_pdf_btn.setEnabled(enabled)
         self._delete_btn.setEnabled(enabled)
 
 

@@ -210,3 +210,35 @@ def test_describe_report_summarizes_uds():
 
     plain = _report()
     assert "UDS:" not in describe_report(plain)
+
+
+def test_update_rewrites_session_in_place(tmp_path):
+    store = SessionStore(tmp_path)
+    saved = store.save(_report(), when=datetime(2026, 10, 5, 9, 0, tzinfo=UTC))
+    report = store.load(saved.name)
+    assert report is not None
+    report["work_order"] = {"customer": "Sam Rivera", "job": "Misfire diagnosis"}
+
+    updated = store.update(saved.name, report)
+    assert updated == saved
+    reloaded = store.load(saved.name)
+    assert reloaded is not None
+    assert reloaded["work_order"]["customer"] == "Sam Rivera"
+
+    assert store.update("session-99990101-000000.json", report) is None
+    assert store.update("not-a-session.txt", report) is None
+
+
+def test_describe_report_shows_work_order():
+    report = _report()
+    assert report["work_order"] == {}
+    assert "Customer:" not in describe_report(report)
+
+    report["work_order"] = {
+        "customer": "Sam Rivera",
+        "job": "Misfire diagnosis",
+        "phone": "",
+    }
+    text = describe_report(report)
+    assert "Customer: Sam Rivera" in text
+    assert "Job: Misfire diagnosis" in text

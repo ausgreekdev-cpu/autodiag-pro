@@ -157,7 +157,11 @@ def run_scan(
 
     # Write before disconnecting: build_report snapshots record.session.
     path = Path(out) if out else Path(f"autodiag-scan-{datetime.now():%Y%m%d-%H%M%S}.json")
-    write_report(record, path)
+    try:
+        write_report(record, path)
+    except ValueError as exc:
+        print(f"scan: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
 
     dtc_total = sum(len(codes) for codes in record.dtcs.values())
     print(
@@ -199,7 +203,9 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--vehicle", action="store_true", help="also probe the bus with 0100")
     scan = sub.add_parser("scan", help="run a headless scan and write a report")
     scan.add_argument("-d", "--device", help="serial device (default: the only port present)")
-    scan.add_argument("-o", "--out", help="report path (.json, .csv or .html)")
+    scan.add_argument(
+        "-o", "--out", help="report path (.json, .csv or .html — PDF is app-only)"
+    )
     scan.add_argument("--seconds", type=float, default=5.0, help="live-poll duration (default: 5)")
     scan.add_argument("--interval", type=float, default=0.25, help="poll interval in seconds")
     scan.add_argument("--pids", help="comma-separated hex PIDs to poll (default: 0C,0D,05)")
