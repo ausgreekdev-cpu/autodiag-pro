@@ -126,6 +126,8 @@ Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 | 25. UDS read-only requests (v0.19.0) | done |
 | 26. UDS session history + reports (v0.20.0) | done |
 | 27. UDS write services with waiver (v0.21.0) | done |
+| 28. PDF export + session work orders (v0.22.0) | done |
+| 29. Microsoft Store MSIX packaging (v0.22.0) | done |
 
 ## Install & run
 
