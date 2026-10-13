@@ -35,6 +35,21 @@ def test_msix_version_pads_to_four_parts(build):
     assert build.msix_version("1.2.3") == "1.2.3.0"
 
 
+def test_placeholder_identity_matches_msix_name_schema(build):
+    """Identity Name must match the MSIX schema pattern [-.A-Za-z0-9]+.
+
+    makeappx rejects anything else (underscores!), which failed the first
+    CI run of the package-msix job.
+    """
+    import re
+
+    name = build.PLACEHOLDER_IDENTITY["package_name"]
+    assert re.fullmatch(r"[-.A-Za-z0-9]+", name)
+    publisher = build.PLACEHOLDER_IDENTITY["publisher"]
+    assert publisher.startswith("CN=")
+    assert re.fullmatch(r"[-.A-Za-z0-9]+", publisher[3:])
+
+
 @pytest.mark.parametrize("bad", ["0.21", "0.21.0.1", "0.21.x", "v0.21.0", ""])
 def test_msix_version_rejects_bad_input(build, bad):
     with pytest.raises(ValueError):

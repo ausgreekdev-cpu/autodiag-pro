@@ -38,7 +38,9 @@ EXE_NAME = "autodiag-windows-x86_64.exe"
 MANIFEST_NAME = "AppxManifest.xml"
 
 PLACEHOLDER_IDENTITY = {
-    "package_name": "AutoDiagPro_Placeholder",
+    # Identity Name must match the MSIX schema pattern [-.A-Za-z0-9]+ —
+    # no underscores.
+    "package_name": "AutoDiagPro-Placeholder",
     "publisher": "CN=AutoDiagPro-Placeholder",
     "publisher_display": "AutoDiag Pro",
 }
