@@ -95,6 +95,23 @@ Prebuilt binaries for every release are on the
 Binaries are built by CI (`.github/workflows/release.yml`) on the tag — see
 *Packaging a standalone executable* below to build from source instead.
 
+## Editions & licensing
+
+AutoDiag Pro is **free** for generic OBD-II diagnostics — live gauges,
+reading and clearing codes, CSV/HTML exports, guided basics.
+
+| | Free | Pro $34 | Workshop $49/mo |
+|---|---|---|---|
+| Live gauges, read/clear codes, CSV & HTML export | ✓ | ✓ | ✓ |
+| Session history | last 10 | full | full |
+| UDS module reads ($10/$19/$22), PDF reports | — | ✓ | ✓ |
+| UDS write services, work orders | — | — | ✓ |
+
+Unlock with a signed licence key via *Settings → Install licence key…*
+(Microsoft Store purchases arrive with the Store listing). The first launch
+asks you to accept the safety notice & [EULA](docs/eula.md); everything
+stays offline — key checks are local Ed25519 verification.
+
 ## Status
 
 | Milestone | Status |

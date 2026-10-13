@@ -163,6 +163,15 @@ class Prefs:
         data = {f"{pid:02X}": [low, high] for pid, (low, high) in thresholds.items()}
         self._s.setValue("watchlist", json.dumps(data))
 
+    # -- legal --------------------------------------------------------------------
+
+    def eula_version(self) -> str:
+        """Accepted EULA version ("" = never accepted)."""
+        return str(self._s.value("eula_version", "") or "")
+
+    def set_eula_version(self, version: str) -> None:
+        self._s.setValue("eula_version", version)
+
     # -- io ---------------------------------------------------------------------
 
     def sync(self) -> None:

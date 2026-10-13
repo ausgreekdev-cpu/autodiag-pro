@@ -1,4 +1,4 @@
-"""UDS panel: ISO 14229 requests — reads free, writes behind a waiver."""
+"""UDS panel: ISO 14229 requests — reads (Pro), writes (Workshop + waiver)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,9 @@ from PySide6.QtWidgets import (
 
 from autodiag.obd import framing, uds
 from autodiag.obd.uds import KNOWN_DIDS, UdsError, validate_request
+from autodiag.services.license import LicenseManager, get_license
 from autodiag.services.worker import ObdWorker
+from autodiag.ui.license import try_unlock
 
 _MAX_ROWS = 100
 
@@ -31,9 +33,18 @@ _MAX_ROWS = 100
 class UdsPanel(QWidget):
     """UDS requests with decoded results; write services need the waiver."""
 
-    def __init__(self, worker: ObdWorker, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        worker: ObdWorker,
+        parent: QWidget | None = None,
+        *,
+        license_manager: LicenseManager | None = None,
+    ) -> None:
         super().__init__(parent)
         self._worker = worker
+        self._license = (
+            license_manager if license_manager is not None else get_license()
+        )
         self._connected = False
 
         self._build_ui()
@@ -270,14 +281,27 @@ class UdsPanel(QWidget):
         if message is not None:
             self._status.setText(message)
             return
+        normalized = "".join(hex_request.split()).upper()
+        try:
+            is_write = int(normalized[:2], 16) in uds.WRITE_SERVICES
+        except ValueError:
+            is_write = False
+        if is_write:
+            if not try_unlock(self, self._license, "uds.write"):
+                self._status.setText(
+                    "UDS write services are a Workshop feature — see Settings."
+                )
+                return
+        elif not try_unlock(self, self._license, "uds.read"):
+            self._status.setText("UDS module reads are a Pro feature — see Settings.")
+            return
         tx = (self._tx_edit.text().strip() or uds.DEFAULT_TX_HEADER).upper()
         try:
             int(tx, 16)
         except ValueError:
             self._status.setText("ECU header must be 1–3 hex digits (e.g. 7E0).")
             return
-        normalized = "".join(hex_request.split()).upper()
-        if int(normalized[:2], 16) in uds.WRITE_SERVICES:
+        if is_write:
             answer = QMessageBox.warning(
                 self,
                 "Confirm write",
@@ -364,6 +388,15 @@ class UdsPanel(QWidget):
             self._tx_edit.setText(str(header))
 
     def _on_waiver_toggled(self, checked: bool) -> None:
+        if checked and not self._license.current().allows("uds.write"):
+            self._waiver_chk.blockSignals(True)
+            self._waiver_chk.setChecked(False)
+            self._waiver_chk.blockSignals(False)
+            self._status.setText(
+                "UDS write services are a Workshop feature — see Settings."
+            )
+            try_unlock(self, self._license, "uds.write")
+            checked = False
         write_enabled = self._connected and checked
         for widget in (
             self._write_did_edit,

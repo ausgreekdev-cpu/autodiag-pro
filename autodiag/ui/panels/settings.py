@@ -21,7 +21,9 @@ from autodiag import __version__
 from autodiag.obd.dictionary import load_dictionary
 from autodiag.services import update_check
 from autodiag.services.export import build_report, write_report
+from autodiag.services.license import LicenseManager, get_license, tier_label
 from autodiag.services.record import ScanRecord
+from autodiag.ui.license import UpgradeDialog, install_license_key, try_unlock
 from autodiag.ui.pdf import write_report_pdf
 from autodiag.ui.prefs import PROTOCOL_CHOICES, Prefs
 
@@ -59,12 +61,16 @@ class SettingsPanel(QWidget):
         *,
         prefs: Prefs | None = None,
         on_protocol: Callable[[str], None] | None = None,
+        license_manager: LicenseManager | None = None,
     ) -> None:
         super().__init__(parent)
         self._record = record
         self._on_message = on_message
         self._prefs = prefs
         self._on_protocol = on_protocol
+        self._license = (
+            license_manager if license_manager is not None else get_license()
+        )
         self._update_worker: UpdateCheckWorker | None = None
 
         layout = QVBoxLayout(self)
@@ -127,6 +133,24 @@ class SettingsPanel(QWidget):
         self._export_label.setObjectName("subtle")
         report_layout.addWidget(self._export_label)
         layout.addWidget(report_group)
+
+        license_group = QGroupBox("Licence")
+        license_layout = QVBoxLayout(license_group)
+        self._tier_label = QLabel("")
+        license_layout.addWidget(self._tier_label)
+        license_row = QHBoxLayout()
+        self._install_key_btn = QPushButton("Install licence key…")
+        self._install_key_btn.clicked.connect(self._on_install_key)
+        license_row.addWidget(self._install_key_btn)
+        self._plans_btn = QPushButton("See plans…")
+        self._plans_btn.clicked.connect(
+            lambda: UpgradeDialog(self._license, "uds.read", self).exec()
+        )
+        license_row.addWidget(self._plans_btn)
+        license_row.addStretch(1)
+        license_layout.addLayout(license_row)
+        layout.addWidget(license_group)
+        self._refresh_license_label()
 
         about_group = QGroupBox("About")
         about_layout = QVBoxLayout(about_group)
@@ -201,9 +225,28 @@ class SettingsPanel(QWidget):
         self._update_worker = None
         self._update_btn.setEnabled(True)
 
+    # -- licence ----------------------------------------------------------------
+
+    def _refresh_license_label(self) -> None:
+        state = self._license.current()
+        text = f"Tier: {tier_label(state.tier)}"
+        if state.licensee:
+            text += f" — {state.licensee}"
+        if state.expires is not None:
+            text += f" (expires {state.expires.isoformat()})"
+        self._tier_label.setText(text)
+
+    def _on_install_key(self) -> None:
+        if install_license_key(self, self._license):
+            self._on_message("Licence key installed.")
+        self._refresh_license_label()
+
     # -- export -----------------------------------------------------------------
 
     def export_with_dialog(self, suffix: str) -> None:
+        if suffix == "pdf" and not try_unlock(self, self._license, "pdf.export"):
+            self._on_message("PDF reports are a Pro feature — install a licence key.")
+            return
         _filter = _EXPORT_FILTERS.get(suffix, _JSON_FILTER)
         path, _selected = QFileDialog.getSaveFileName(
             self,

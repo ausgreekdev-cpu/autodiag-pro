@@ -76,17 +76,17 @@ four-part version than the previous one (CI takes care of this per tag).
   shows them automatically.
 - **Trailers/videos:** optional, skip for v1.
 
-## 5. Pricing and trial
+## 5. Pricing (freemium — decided at M30)
 
-- Pricing model: **paid** (one-time purchase). Pick your price in the
-  pricing tab (Store suggests regional equivalents; a common point for
-  utilities is in the $15–25 range — your call).
-- Enable a **free trial** (e.g. 14 days). The Store enforces the trial
-  window; after expiry the OS blocks launch and offers the purchase page —
-  no app code involved.
-- Revenue share under Microsoft's current published terms: developers keep
-  ~85% via Microsoft's commerce (more via deep-link purchases; see the
-  App Developer Agreement you accept at registration).
+- Listing price: **Free** — the base tier (generic OBD-II read/clear, live
+  gauges, CSV/HTML export) is the acquisition funnel.
+- Pro / Workshop tiers unlock via signed licence keys today
+  (`packaging/make_license.py`); Store purchases arrive with milestone M36
+  (in-app add-on/subscription + Store API wiring) — wire that before public
+  launch if tiers should sell through the Store.
+- The earlier "paid app + trial" plan is **superseded**; if the submission
+  is created before M36, still publish it as Free with a "Pro upgrade
+  coming" note rather than charging for the base app.
 
 ## 6. Age rating & compliance
 

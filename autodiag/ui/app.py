@@ -7,7 +7,9 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from autodiag.ui.icons import app_icon
+from autodiag.ui.license import ensure_eula_accepted
 from autodiag.ui.main_window import MainWindow
+from autodiag.ui.prefs import Prefs
 from autodiag.ui.theme import apply_theme
 
 
@@ -18,8 +20,11 @@ def main(argv: list[str] | None = None) -> int:
     app.setWindowIcon(app_icon())
     apply_theme(app)
 
-    window = MainWindow()
+    prefs = Prefs()
+    window = MainWindow(prefs=prefs)
     window.show()
+    if not ensure_eula_accepted(window, prefs):
+        return 0  # declined: exit without starting the worker
     window.worker.start()
     try:
         return app.exec()

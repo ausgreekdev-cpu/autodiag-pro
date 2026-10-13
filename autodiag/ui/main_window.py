@@ -25,6 +25,7 @@ from autodiag.obd.pids import PID_REGISTRY, describe_pid
 from autodiag.services.alerts import AlertEvent, AlertLog, Threshold, Watchlist
 from autodiag.services.export import build_report
 from autodiag.services.history import SessionStore, record_has_data
+from autodiag.services.license import LicenseManager, get_license
 from autodiag.services.live_log import LiveLog
 from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
@@ -59,12 +60,14 @@ class MainWindow(QMainWindow):
         worker: ObdWorker | None = None,
         prefs: Prefs | None = None,
         store: SessionStore | None = None,
+        license_manager: LicenseManager | None = None,
     ) -> None:
         super().__init__()
         self.worker = worker or ObdWorker()
         self.record = ScanRecord()
         self._prefs = prefs if prefs is not None else Prefs()
         self._store = store if store is not None else SessionStore()
+        self._license = license_manager if license_manager is not None else get_license()
         self._connected = False
         # logs live beside the sessions; armed from prefs (default on)
         self._live_log = LiveLog(
@@ -159,9 +162,10 @@ class MainWindow(QMainWindow):
                 lambda msg: self.statusBar().showMessage(msg, 8000),
                 prefs=self._prefs,
                 on_protocol=self.worker.set_protocol,
+                license_manager=self._license,
             )
         )
-        self._history = HistoryPanel(self._store)
+        self._history = HistoryPanel(self._store, license_manager=self._license)
         self._stack.addWidget(self._history)
         self._viewer = LogViewerPanel(Path(self._store.directory) / "logs")
         self._stack.addWidget(self._viewer)
@@ -178,7 +182,8 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._alerts)
         self._alerts.thresholds_changed.connect(self._on_thresholds_changed)
         self._stack.addWidget(Mode05Panel(self.worker))
-        self._stack.addWidget(UdsPanel(self.worker))
+        self._uds = UdsPanel(self.worker, license_manager=self._license)
+        self._stack.addWidget(self._uds)
 
         nav_items = (
             "Dashboard",

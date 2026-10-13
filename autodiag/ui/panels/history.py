@@ -23,7 +23,9 @@ from PySide6.QtWidgets import (
 )
 
 from autodiag.services.history import SessionStore, describe_report
+from autodiag.services.license import LicenseManager, get_license
 from autodiag.ui.compare_dialog import CompareDialog
+from autodiag.ui.license import try_unlock
 from autodiag.ui.pdf import write_report_pdf
 from autodiag.ui.work_order import WorkOrderDialog
 
@@ -45,10 +47,20 @@ class HistoryPanel(QWidget):
 
     view_log = Signal(str)  # log filename (emitted by the View log… button)
 
-    def __init__(self, store: SessionStore, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        store: SessionStore,
+        parent: QWidget | None = None,
+        *,
+        license_manager: LicenseManager | None = None,
+    ) -> None:
         super().__init__(parent)
         self._store = store
+        self._license = (
+            license_manager if license_manager is not None else get_license()
+        )
         self._summaries: list[dict] = []
+        self._total = 0
         self._selected: str | None = None
         self._selected_log: str | None = None
         self._build_ui()
@@ -137,7 +149,10 @@ class HistoryPanel(QWidget):
 
     def refresh(self) -> None:
         """Reload the store into the table (also clears a stale selection)."""
-        self._summaries = self._store.list()
+        stored = self._store.list()
+        limit = self._license.current().history_limit()
+        self._total = len(stored)
+        self._summaries = stored if limit is None else stored[:limit]
         self._table.blockSignals(True)
         self._table.setRowCount(0)
         for summary in self._summaries:
@@ -165,7 +180,12 @@ class HistoryPanel(QWidget):
         self._selected_log = None
         self._detail.clear()
         self._set_buttons_enabled(False)
-        if self._summaries:
+        if limit is not None and self._total > limit:
+            self._count_label.setText(
+                f"Showing {len(self._summaries)} of {self._total} session(s) "
+                "— Pro unlocks full history"
+            )
+        elif self._summaries:
             self._count_label.setText(f"{len(self._summaries)} session(s)")
         else:
             self._count_label.setText("No saved sessions yet")
@@ -198,6 +218,8 @@ class HistoryPanel(QWidget):
     def _export(self, suffix: str) -> None:
         if self._selected is None:
             return
+        if suffix == ".pdf" and not try_unlock(self, self._license, "pdf.export"):
+            return
         default = f"{self._selected.removesuffix('.json')}{suffix}"
         path, _ = QFileDialog.getSaveFileName(
             self,
@@ -216,6 +238,8 @@ class HistoryPanel(QWidget):
 
     def _on_work_order(self) -> None:
         if self._selected is None:
+            return
+        if not try_unlock(self, self._license, "work_order"):
             return
         report = self._store.load(self._selected)
         if report is None:

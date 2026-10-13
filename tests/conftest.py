@@ -51,3 +51,22 @@ def _isolate_default_store(monkeypatch, tmp_path_factory):
     monkeypatch.setattr(
         "autodiag.services.history.default_directory", lambda: target
     )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_license(tmp_path_factory):
+    """Full-featured tier by default; gating tests opt into FREE explicitly.
+
+    Also keeps get_license() off the real user's AppData directory.
+    """
+    from autodiag.services import license as license_mod
+
+    manager = license_mod.LicenseManager(
+        key_path=tmp_path_factory.mktemp("autodiag-license") / "license.json",
+        state=license_mod.LicenseState(
+            license_mod.Tier.WORKSHOP, source="key", licensee="test suite"
+        ),
+    )
+    license_mod.set_license(manager)
+    yield
+    license_mod.set_license(None)
