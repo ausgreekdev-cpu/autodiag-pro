@@ -176,7 +176,8 @@ class SettingsPanel(QWidget):
 
         privacy_note = QLabel(
             "No data leaves this machine unless you press Check for updates "
-            "(one GitHub API request)."
+            "(one GitHub API request) or Look up VIN (NHTSA) on the Vehicle "
+            "info panel (vPIC VIN decode + recall lookup)."
         )
         privacy_note.setObjectName("subtle")
         about_layout.addWidget(privacy_note)

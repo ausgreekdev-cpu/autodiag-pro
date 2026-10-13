@@ -19,6 +19,7 @@ class ScanRecord:
     cvns: list[str] = field(default_factory=list)
     obd_standard: str | None = None
     fuel_type: str | None = None
+    nhtsa: dict | None = None  # VIN decode + recalls payload (opt-in lookup)
     monitors: MonitorStatus | None = None
     dtcs: dict[str, list[str]] = field(default_factory=dict)  # source → codes
     freeze: dict[int, dict[int, float]] = field(default_factory=dict)  # frame → pid → value
@@ -54,6 +55,8 @@ class ScanRecord:
             self.cvns = list(info.get("cvns") or [])
             self.obd_standard = info.get("obd_standard")
             self.fuel_type = info.get("fuel_type")
+        elif kind == "nhtsa":
+            self.nhtsa = args[0]  # None clears (stale VIN after a re-read)
         elif kind == "freeze_all":
             self.freeze[int(args[0])] = dict(args[1])
         elif kind == "mode06":

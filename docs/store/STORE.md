@@ -57,7 +57,10 @@ four-part version than the previous one (CI takes care of this per tag).
   - UDS (ISO 14229) requests for advanced diagnostics — with safety
     waiver for write services
   - Scan history, HTML/PDF/CSV reports and customer work orders
-  - Works fully offline — no accounts, no telemetry
+  - VIN decode and open safety-recall lookup via official NHTSA services
+    (opt-in, on press)
+  - Works fully offline — no accounts, no telemetry; the update check and
+    NHTSA lookup only run when you press their buttons
 - **Category:** Utilities & tools (secondary: System utilities)
 - **System requirements:** Windows 10 version 1809 (build 17763) or later,
   x64; ELM327-compatible USB or Bluetooth SPP adapter (not included).

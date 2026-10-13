@@ -33,7 +33,8 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **Freeze frame** — sensor snapshot captured when a fault was set (`02`), with a
   frame 0/1/2 picker
 - **Vehicle info** — VIN, calibration IDs, CVN (`09`), plus OBD standard and
-  fuel type (`01 1C`/`01 51`)
+  fuel type (`01 1C`/`01 51`); an optional *Look up VIN (NHTSA)* button
+  decodes the VIN (make/model/year/engine) and lists open safety recalls
 - **Mode $06** — onboard test results (monitor + standardized test name vs. the
   min/max limits the ECU used, PASS/FAIL), with an *Only failures* filter
 - **Mode $05** — oxygen-sensor monitor test results for non-CAN buses
@@ -77,11 +78,16 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **Update check** — press *Check for updates* in Settings (or run
   `autodiag updates`) to compare against the latest GitHub release; one
   request, only when you ask
+- **VIN lookup** — press *Look up VIN (NHTSA)* on the Vehicle info panel to
+  decode the VIN through the official DOT vPIC service and list open NHTSA
+  safety recalls for the decoded make/model/year; two HTTPS requests, only
+  when you ask
 - **Command-line tools** — headless `autodiag doctor` adapter smoke test
   (works without a car) and `autodiag scan` report generation
 
 Fully offline: no accounts, no servers — everything runs on your machine.
-The only optional network call is the update check you trigger yourself.
+The only optional network calls are the update check and the NHTSA VIN
+lookup, both ones you trigger yourself.
 
 ## Download
 
@@ -185,6 +191,8 @@ autodiag            # or: python -m autodiag
 6. **Readiness / Freeze frame / Vehicle info / Mode $05 / Mode $06** — each panel
    has its own read button; results stay available for the report. The freeze-frame
    panel can read any of frames 0–2 and keeps each frame cached for comparison.
+   On *Vehicle info*, *Look up VIN (NHTSA)* decodes the VIN and fetches open
+   safety recalls (offline mode simply reports the failure).
 7. **Settings** — export the whole session (VIN, codes, monitors, Mode $05/$06,
    latest readings) as JSON, CSV, HTML or PDF, pin the OBD protocol if auto-detection fails or
    picks the wrong one, or press *Check for updates* to compare the running version

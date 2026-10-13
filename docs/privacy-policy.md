@@ -20,15 +20,25 @@ All data stays in a local app-data folder on your device:
 
 - No accounts, no sign-in
 - No telemetry, analytics, crash reporting, or advertising
-- No cloud services — the app works with networking disabled
-- No vehicle or personal data ever leaves your device
+- No cloud services of our own — the app works with networking disabled
+- Nothing is sent automatically; the only outbound requests are the two
+  press-triggered features described below
 
 ## Optional network use
 
-The **Check for updates** feature (in Settings and the `autodiag updates`
-command-line tool) makes a single HTTPS request to the public GitHub API to
-compare the installed version against published releases. This request
-contains no personal data.
+Two features make outbound HTTPS requests, both **only when you press a
+button** — there is no background networking:
+
+- **Check for updates** (in Settings and the `autodiag updates`
+  command-line tool) makes a single request to the public GitHub API to
+  compare the installed version against published releases. This request
+  contains no personal data.
+- **Look up VIN (NHTSA)** (Vehicle info panel) sends the vehicle VIN to the
+  official US DOT vPIC service (`vpic.nhtsa.dot.gov`) to decode it. The
+  decoded make, model and model year are then sent to NHTSA's recalls API
+  (`api.nhtsa.gov`) to list open safety recalls. These are anonymous HTTPS
+  requests to US government services; no account or personal data is
+  included.
 
 ## Distribution through the Microsoft Store
 

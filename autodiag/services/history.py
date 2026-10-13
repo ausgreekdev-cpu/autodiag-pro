@@ -161,6 +161,17 @@ def describe_report(report: dict[str, Any]) -> str:
         lines.append(f"VIN: {vehicle['vin']}")
     for cal in vehicle.get("calibration_ids") or []:
         lines.append(f"Cal ID: {cal}")
+    details = vehicle.get("details") or {}
+    if details.get("make"):
+        spec = " ".join(
+            part
+            for part in (details.get("year"), details.get("make"), details.get("model"))
+            if part
+        )
+        lines.append(f"Vehicle: {spec}")
+    recalls = vehicle.get("recalls") or []
+    if recalls:
+        lines.append(f"Recalls: {len(recalls)} open (NHTSA)")
 
     work_order = report.get("work_order") or {}
     if any(work_order.values()):
@@ -236,4 +247,5 @@ def record_has_data(record: ScanRecord) -> bool:
         or record.freeze
         or record.pids
         or record.uds
+        or record.nhtsa
     )

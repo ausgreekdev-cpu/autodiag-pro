@@ -154,7 +154,9 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(TroubleCodesPanel(self.worker))
         self._stack.addWidget(ReadinessPanel(self.worker))
         self._stack.addWidget(FreezeFramePanel(self.worker))
-        self._stack.addWidget(VehicleInfoPanel(self.worker))
+        self._stack.addWidget(
+            VehicleInfoPanel(self.worker, record=self.record)
+        )
         self._stack.addWidget(Mode06Panel(self.worker))
         self._stack.addWidget(
             SettingsPanel(

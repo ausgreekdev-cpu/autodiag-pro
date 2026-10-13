@@ -124,6 +124,7 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
         )
 
     generated = now or datetime.now(UTC)
+    nhtsa = record.nhtsa or {}
     report: dict[str, Any] = {
         "app": {"name": "AutoDiag Pro", "version": __version__},
         "generated_at": generated.isoformat(timespec="seconds"),
@@ -138,6 +139,8 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
             "cvn": record.cvns,
             "obd_standard": record.obd_standard,
             "fuel_type": record.fuel_type,
+            "details": nhtsa or None,
+            "recalls": list(nhtsa.get("recalls") or []),
         },
         "readiness": readiness,
         "dtcs": dtcs,
@@ -176,6 +179,15 @@ def report_to_csv(report: dict[str, Any]) -> str:
         add("vehicle", f"calibration_id[{index}]", "", cal)
     for index, cvn in enumerate(vehicle["cvn"]):
         add("vehicle", f"cvn[{index}]", "", cvn)
+    details = vehicle.get("details") or {}
+    for key in ("make", "model", "year", "body_class", "cylinders", "trim"):
+        if details.get(key):
+            add("vehicle", f"detail.{key}", "", details[key])
+    for index, recall in enumerate(vehicle.get("recalls") or []):
+        section_name = f"nhtsa.recall[{index}]"
+        for field in ("campaign", "component", "received", "remedy"):
+            if recall.get(field):
+                add(section_name, field, "", recall[field])
 
     readiness = report["readiness"]
     if readiness:
@@ -379,6 +391,19 @@ def report_to_html(report: dict[str, Any]) -> str:
         ["Calibration IDs", h(", ".join(vehicle.get("calibration_ids") or []))],
         ["CVN", h(", ".join(vehicle.get("cvn") or []))],
     ]
+    details = vehicle.get("details") or {}
+    if details.get("warning"):
+        vehicle_rows.append(["NHTSA note", h(details["warning"])])
+    for label, key in (
+        ("Make", "make"),
+        ("Model", "model"),
+        ("Model year", "year"),
+        ("Body class", "body_class"),
+        ("Engine", "engine_text"),
+        ("Trim", "trim"),
+    ):
+        if details.get(key):
+            vehicle_rows.append([label, h(details[key])])
     parts.append(
         '<section class="cols">'
         f'<div class="col"><h2>Adapter</h2>{table(["Field", "Value"], adapter_rows)}</div>'
@@ -401,6 +426,31 @@ def report_to_html(report: dict[str, Any]) -> str:
             if value
         ]
         parts.append(section("Work order", table(["Field", "Value"], rows)))
+
+    recalls = vehicle.get("recalls") or []
+    if recalls:
+        rows = [
+            [
+                f"<b>{h(recall.get('campaign'))}</b>",
+                h(recall.get("component")),
+                h(recall.get("received")),
+                h(recall.get("remedy")),
+            ]
+            for recall in recalls
+        ]
+        parts.append(
+            section(
+                f"Safety recalls (NHTSA) — {len(recalls)} open",
+                table(["Campaign", "Component", "Reported", "Remedy"], rows),
+            )
+        )
+    elif details.get("recall_status") == "error":
+        parts.append(
+            section(
+                "Safety recalls (NHTSA)",
+                f'<p class="meta">Lookup failed: {h(details.get("recall_message"))}</p>',
+            )
+        )
 
     if readiness:
         mil = badge(
