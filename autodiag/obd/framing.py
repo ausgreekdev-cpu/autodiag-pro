@@ -6,6 +6,7 @@ Pure functions — no I/O — so every quirk of ELM327 output can be unit-tested
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Mapping
 
 PROMPT = ">"
 
@@ -91,6 +92,63 @@ def extract_payload(text: str, prefix: str) -> str | None:
     if idx < 0:
         return None
     return flat[idx + len(prefix):]
+
+
+def split_pid_chunks(
+    text: str,
+    pids: Iterable[int],
+    data_lengths: Mapping[int, int] | None = None,
+) -> dict[int, str]:
+    """Split a multi-PID ``01 xx 01 yy …`` response into per-PID chunks.
+
+    Each chunk keeps its ``41 <pid>`` prefix so the single-PID parsers
+    (``extract_payload`` / ``parse_pid_values``) work unchanged. Only
+    requested ``pids`` are recognized and the first occurrence per PID wins
+    (extra ECUs answering the same PID are ignored — same as single-PID
+    requests).
+
+    When ``data_lengths`` (J1979 payload size in bytes per PID) is given,
+    chunk boundaries follow that structure, so payload bytes that happen to
+    spell ``41 <pid>`` (e.g. RPM 4163.25 = ``41 0D`` next to a requested
+    ``0D``) cannot create false markers. Without lengths the split is a
+    plain byte-aligned marker scan.
+    """
+    flat = flatten_response(strip_prompt(text))
+    wanted = {f"41{pid:02X}": pid for pid in pids}
+    steps = {
+        f"41{pid:02X}": 4 + 2 * data_lengths[pid]
+        for pid in pids
+        if data_lengths and pid in data_lengths
+    }
+
+    def next_marker(search: int) -> tuple[int, str] | None:
+        for index in range(search & ~1, len(flat) - 3, 2):  # byte-aligned
+            token = flat[index : index + 4]
+            if token in wanted:
+                return index, token
+        return None
+
+    chunks: dict[int, str] = {}
+    search = 0
+    while True:
+        found = next_marker(search)
+        if found is None:
+            return chunks
+        start, token = found
+        pid = wanted[token]
+        step = steps.get(token)
+        if pid in chunks:
+            search = start + (step if step else 4)  # duplicate/extra ECU
+            continue
+        if step:
+            end = min(start + step, len(flat))
+            chunks[pid] = flat[start:end]
+            search = end
+        else:
+            following = next_marker(start + 4)
+            end = following[0] if following else len(flat)
+            chunks[pid] = flat[start:end]
+            search = start + 4
 
 
 def parse_supported_mask(

@@ -21,7 +21,9 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **Live data** — engine RPM, speed, coolant, load, fuel trims, O2 sensors (voltage
   **and** short-term fuel trim per sensor)... the full standard SAE J1979 registry
   (160 channels) filtered to what the vehicle reports as supported (`0100`
-  bitmaps), four headline gauges + a scrolling graph of any ticked parameters
+  bitmaps), four headline gauges + a scrolling graph of any ticked parameters;
+  on CAN buses up to **6 PIDs are requested per transaction** (batched multi-PID
+  polling), refreshing the full set about 6× faster than one-at-a-time requests
 - **Threshold alerts** — watch any parameter against a min/max limit while
   polling: the dashboard cell lights amber on a crossing, the status bar
   flashes the reading vs. the limit, and every excursion lands in an Alerts
@@ -151,6 +153,9 @@ stays offline — key checks are local Ed25519 verification.
 | 27. UDS write services with waiver (v0.21.0) | done |
 | 28. PDF export + session work orders (v0.22.0) | done |
 | 29. Microsoft Store MSIX packaging (v0.22.0) | done |
+| 30. Freemium licensing + EULA (v0.23.0) | done |
+| 31. VIN decode + NHTSA recall lookup (v0.23.0) | done |
+| 32. Batched multi-PID polling + STN profile (v0.23.0) | done |
 
 ## Install & run
 

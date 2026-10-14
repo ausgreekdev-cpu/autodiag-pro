@@ -793,3 +793,128 @@ def test_uds_job_negative_response_emits_uds_not_error():
     assert not sink.of("error"), "a NRC must not tear down the session"
     assert holder["transport"].writes[-2:] == ["AT SH", "AT CRA"]
     assert engine.connected
+
+
+# -- batched multi-PID polling (M32) -------------------------------------------
+
+
+def test_poll_batches_pids_on_can():
+    connector, holder = scripted_connector({
+        "ATDPN": b"A6\r\r>",
+        "010C010D": b"41 0C 1A F8 41 0D 3C\r\r>",
+    })
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    assert engine._batch_size == 6  # CAN (ATDPN A6) raises the batch size
+
+    engine.submit("set_poll", ({0x0C, 0x0D}, 0.0))
+    engine.step(0.0)
+    _pump(engine, lambda: len(sink.of("pid_value")) >= 2)
+
+    assert "010C010D" in holder["transport"].writes
+    values = dict((pid, value) for pid, value, _t in sink.of("pid_value"))
+    assert values[0x0C] == pytest.approx(1726.0)
+    assert values[0x0D] == pytest.approx(60.0)
+    assert any("(batched)" in message for message, in sink.of("status"))
+
+
+def test_poll_stays_single_without_can_protocol():
+    connector, holder = scripted_connector()  # ATDPN defaults to "A" (unknown)
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    engine.submit("set_poll", ({0x0C, 0x0D}, 0.0))
+    engine.step(0.0)
+    _pump(engine, lambda: len(sink.of("pid_value")) >= 2)
+
+    writes = holder["transport"].writes
+    assert "010C" in writes and "010D" in writes
+    assert "010C010D" not in writes
+    assert engine._batch_size == 1
+
+
+def test_batch_missing_chunk_drops_pid_after_three():
+    connector, _holder = scripted_connector({
+        "ATDPN": b"A6\r\r>",
+        "010C010D": b"41 0C 1A F8\r\r>",  # 0x0D never answers
+    })
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    engine.submit("set_poll", ({0x0C, 0x0D}, 0.0))
+    engine.step(0.0)
+
+    assert _pump(engine, lambda: any("Dropping PID 0D" in m for m, in sink.of("status")))
+    sink.events.clear()
+    _pump(engine, lambda: any(pid == 0x0C for pid, _v, _t in sink.of("pid_value")))
+    polled = {pid for pid, _v, _t in sink.of("pid_value")}
+    assert polled == {0x0C}
+    assert engine._batch_size == 6  # single-pid batches never trigger fallback
+
+
+def test_batch_error_falls_back_to_singles():
+    connector, holder = scripted_connector({"ATDPN": b"A6\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    engine.submit("set_poll", ({0x0C, 0x0D}, 0.0))
+    engine.step(0.0)
+
+    assert _pump(engine, lambda: engine._batch_size == 1)
+    assert any(
+        "Batched polling unavailable" in message for message, in sink.of("status")
+    )
+    _pump(engine, lambda: len(sink.of("pid_value")) >= 2)
+    writes = holder["transport"].writes
+    assert "010C" in writes and "010D" in writes
+    assert not any("Dropping PID" in message for message, in sink.of("status"))
+
+
+def test_batch_rotation_covers_more_pids_than_batch_size():
+    # Supported bitmap requests eight PIDs → two batches per full sweep.
+    connector, holder = scripted_connector({
+        "ATDPN": b"A6\r\r>",
+        "0100": b"4100087B8000\r\r>",
+        "0105010A010B010C010D010F": (
+            b"4105 7B 410A 00 410B 64 410C 1A F8 410D 3C 410F 80 00\r\r>"
+        ),
+        "01100111": b"4110 1F 40 4111 80\r\r>",
+    })
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    engine.submit("set_poll", (None, 0.0))  # default pids, zero interval
+    engine.step(0.0)
+
+    _pump(
+        engine,
+        lambda: len(sink.of("pid_value")) >= 8,
+    )
+    writes = holder["transport"].writes
+    assert "0105010A010B010C010D010F" in writes
+    assert "01100111" in writes
+    values = dict((pid, value) for pid, value, _t in sink.of("pid_value"))
+    assert values[0x05] == pytest.approx(83.0)
+    assert values[0x0C] == pytest.approx(1726.0)
+    assert values[0x0D] == pytest.approx(60.0)
+    assert values[0x10] == pytest.approx(80.0)
+    assert values[0x11] == pytest.approx(50.196, abs=0.01)
+
+
+def test_stn_adapter_emits_status_on_connect():
+    connector, _holder = scripted_connector({"ATZ": b"\r\rSTN1110 v4.1\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    assert sink.of("connected") and sink.of("connected")[0][0].stn is True
+    assert any(
+        "STN adapter detected" in message for message, in sink.of("status")
+    )

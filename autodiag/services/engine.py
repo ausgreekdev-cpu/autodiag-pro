@@ -27,6 +27,7 @@ Connector = Callable[[str], Connection]
 DEFAULT_POLL_INTERVAL = 0.25  # seconds between PID requests (~4 req/s)
 _VOLTAGE_EVERY = 40  # poll ticks between ATRV battery-voltage refreshes
 _MAX_PID_FAILURES = 3  # consecutive ElmErrors before a PID is dropped
+_BATCH_SIZE = 6  # PIDs per request when the bus is CAN (multi-PID command)
 _RECONNECT_BACKOFF = (1.0, 2.0, 4.0, 8.0, 15.0)  # seconds before each retry
 
 _CAN_PROTOCOLS = {"6", "7", "8", "9"}  # ATDPN digits for ISO 15765-4
@@ -66,6 +67,7 @@ class ObdEngine:
         self._cursor = 0
         self._ticks = 0
         self._failures: dict[int, int] = {}
+        self._batch_size = 1  # raised to _BATCH_SIZE on a confirmed CAN bus
 
     # -- public API ----------------------------------------------------------
 
@@ -158,12 +160,15 @@ class ObdEngine:
         self._info = conn.info
         pn = (conn.info.protocol_number or "").upper().lstrip("A")
         self._can = pn in _CAN_PROTOCOLS if pn else None
+        self._batch_size = _BATCH_SIZE if self._can is True else 1
         self._failures.clear()
         self._cursor = 0
         self._ticks = 0
         self._emit("connected", conn.info)
         if conn.info.voltage is not None:
             self._emit("voltage", float(conn.info.voltage))
+        if conn.info.stn:
+            self._emit("status", "STN adapter detected — optimized polling profile")
         self._discover_supported()
         if not self._poll_pids:
             self._poll_pids = sorted(
@@ -171,11 +176,7 @@ class ObdEngine:
             )
         self._polling = bool(self._poll_pids)
         if self._polling:
-            self._emit(
-                "status",
-                f"Polling {len(self._poll_pids)} PIDs every "
-                f"{self._poll_interval:g}s",
-            )
+            self._emit("status", self._poll_status())
 
     def _job_disconnect(self, _payload: Any) -> None:
         self._cancel_reconnect()
@@ -206,10 +207,7 @@ class ObdEngine:
             )
         self._polling = bool(self._poll_pids) and self._session is not None
         if self._polling:
-            self._emit(
-                "status",
-                f"Polling {len(self._poll_pids)} PIDs every {self._poll_interval:g}s",
-            )
+            self._emit("status", self._poll_status())
 
     def _job_read_dtcs(self, source: Any) -> None:
         text = self._req({"stored": "03", "pending": "07", "permanent": "0A"}[source])
@@ -429,31 +427,78 @@ class ObdEngine:
 
     # -- polling -------------------------------------------------------------
 
+    def _poll_status(self) -> str:
+        suffix = " (batched)" if self._batch_size > 1 else ""
+        return (
+            f"Polling {len(self._poll_pids)} PIDs every "
+            f"{self._poll_interval:g}s{suffix}"
+        )
+
+    def _next_batch(self) -> list[int]:
+        """Round-robin slice of ``_poll_pids`` (size 1 = legacy single mode)."""
+        start = self._cursor % len(self._poll_pids)
+        batch = self._poll_pids[start : start + self._batch_size]
+        self._cursor += len(batch)
+        return batch
+
+    def _drop_pid(self, pid: int) -> None:
+        self._poll_pids = [p for p in self._poll_pids if p != pid]
+        self._emit("status", f"Dropping PID {pid:02X} — no response")
+        if not self._poll_pids:
+            self._polling = False
+
     def _maybe_poll(self) -> None:
         if self._session is None or not self._polling or not self._poll_pids:
             return
         now = self._clock()
         if now < self._next_poll_at:
             return
-        pid = self._poll_pids[self._cursor % len(self._poll_pids)]
-        self._cursor += 1
+        batch = self._next_batch()
         self._next_poll_at = now + self._poll_interval
         try:
-            text = self._req(f"01{pid:02X}")
+            text = self._req("".join(f"01{pid:02X}" for pid in batch))
         except ElmError as exc:
+            if len(batch) > 1:
+                # Either a transient bus error or this vehicle dislikes
+                # combined requests: isolate PIDs by reverting to singles.
+                self._batch_size = 1
+                self._emit(
+                    "status",
+                    "Batched polling unavailable — "
+                    "falling back to single-PID requests",
+                )
+                return
+            pid = batch[0]
             self._failures[pid] = self._failures.get(pid, 0) + 1
             if self._failures[pid] >= _MAX_PID_FAILURES:
-                self._poll_pids = [p for p in self._poll_pids if p != pid]
-                self._emit("status", f"Dropping PID {pid:02X} — no response")
-                if not self._poll_pids:
-                    self._polling = False
+                self._drop_pid(pid)
             else:
                 self._emit("error", str(exc))
             return
-        self._failures[pid] = 0
-        for channel, value in pid_dec.parse_pid_values(text, pid).items():
-            self._emit("pid_value", channel, value, self._clock())
         self._ticks += 1
+        if len(batch) == 1:
+            pid = batch[0]
+            self._failures[pid] = 0
+            for channel, value in pid_dec.parse_pid_values(text, pid).items():
+                self._emit("pid_value", channel, value, self._clock())
+        else:
+            lengths = {
+                pid: pid_dec.PID_REGISTRY[pid].data_bytes
+                for pid in batch
+                if pid in pid_dec.PID_REGISTRY
+            }
+            chunks = framing.split_pid_chunks(text, batch, lengths)
+            for pid in batch:
+                if pid in chunks:
+                    self._failures[pid] = 0
+                    for channel, value in pid_dec.parse_pid_values(
+                        chunks[pid], pid
+                    ).items():
+                        self._emit("pid_value", channel, value, self._clock())
+                else:
+                    self._failures[pid] = self._failures.get(pid, 0) + 1
+                    if self._failures[pid] >= _MAX_PID_FAILURES:
+                        self._drop_pid(pid)
         if self._ticks % _VOLTAGE_EVERY == 0:
             try:
                 self._emit("voltage", self._read_voltage())

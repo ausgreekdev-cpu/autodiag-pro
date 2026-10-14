@@ -29,7 +29,7 @@ def test_initialize_happy_path():
     assert transport.is_open
     assert transport.writes == [
         "ATZ", "ATE0", "ATL0", "ATS0", "ATH0",
-        "ATRV", "ATI", "ATSP0", "0100", "ATDPN", "ATDP",
+        "ATRV", "ATI", "ATAT2", "ATSP0", "0100", "ATDPN", "ATDP",
     ]
 
 
@@ -42,7 +42,9 @@ def test_initialize_without_vehicle_probe_skips_bus():
     assert info.protocol is None and info.protocol_number is None
     assert "0100" not in transport.writes
     assert "ATSP0" not in transport.writes
-    assert transport.writes == ["ATZ", "ATE0", "ATL0", "ATS0", "ATH0", "ATRV", "ATI"]
+    assert transport.writes == [
+        "ATZ", "ATE0", "ATL0", "ATS0", "ATH0", "ATRV", "ATI", "ATAT2"
+    ]
 
 
 def test_initialize_pins_protocol():
@@ -144,3 +146,30 @@ def test_close_closes_transport():
     session.initialize()
     session.close()
     assert not transport.is_open
+
+
+def test_initialize_detects_stn_adapter():
+    session, _transport = make_session(elm_script(ATZ=b"\r\rSTN1110 v4.1\r\r>"))
+    info = session.initialize()
+    assert info.stn is True
+
+
+def test_initialize_detects_obdlink_via_ati():
+    session, _transport = make_session(elm_script(ATI=b"\r\rOBDLink MX+ 5.3\r\r>"))
+    info = session.initialize()
+    assert info.stn is True
+
+
+def test_initialize_plain_elm_is_not_stn():
+    session, _transport = make_session()
+    info = session.initialize()
+    assert info.stn is False
+
+
+def test_initialize_unknown_clone_still_sends_atat2():
+    # The adaptive-timing command is best-effort: clones that do not know it
+    # answer "?" and initialization carries on.
+    session, transport = make_session()
+    info = session.initialize()
+    assert "ATAT2" in transport.writes
+    assert info.adapter == "ELM327 v1.5"

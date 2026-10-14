@@ -59,6 +59,7 @@ class SessionInfo:
     voltage: float | None
     protocol: str | None
     protocol_number: str | None
+    stn: bool = False  # STN11xx / OBDLink adapter (extended ST command set)
 
 
 class Elm327Session:
@@ -124,6 +125,18 @@ class Elm327Session:
         except ElmError:
             pass  # some clones dislike ATI; the ATZ banner is good enough
 
+        # Aggressive adaptive timing: shortens the gap between messages on
+        # both ELM327 (v1.4+) and STN firmware; unknown clones answer "?"
+        # and are left at their default timing.
+        try:
+            self._transact("ATAT2", self._command_timeout)
+        except ElmError:
+            pass
+
+        stn = any(
+            marker in f"{banner}\n{adapter}".upper()
+            for marker in ("STN", "OBDLINK")
+        )
         protocol_number: str | None = None
         protocol_description: str | None = None
         if probe_vehicle:
@@ -148,6 +161,7 @@ class Elm327Session:
             voltage=voltage,
             protocol=protocol_description,
             protocol_number=protocol_number,
+            stn=stn,
         )
 
     def command(self, cmd: str, timeout: float | None = None) -> str:
