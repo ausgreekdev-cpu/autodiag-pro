@@ -1395,3 +1395,43 @@ def test_settings_panel_exports_pdf(qapp, tmp_path):
     target = panel.export_to(tmp_path / "scan.pdf")
     assert target.exists()
     assert target.read_bytes()[:4] == b"%PDF"
+
+
+# -- trouble-code guidance pane (M33) ----------------------------------------------
+
+
+def test_trouble_panel_guidance_pane_fills(qapp):
+    from autodiag.services.record import ScanRecord
+
+    panel = TroubleCodesPanel(ObdWorker(), record=ScanRecord())
+    panel.on_dtcs("stored", ["P0301", "P9999"])
+
+    tree = panel._trees["stored"]
+    tree.setCurrentItem(tree.topLevelItem(0))
+    html = panel._guidance_pane.toHtml()
+    assert "P0301" in html
+    assert "Likely causes" in html
+    assert "First checks" in html
+
+    tree.setCurrentItem(tree.topLevelItem(1))
+    assert "No bundled guidance" in panel._guidance_pane.toHtml()
+
+
+def test_trouble_panel_placeholder_without_selection(qapp):
+    panel = TroubleCodesPanel(ObdWorker())
+    panel.on_dtcs("stored", ["P0301"])
+    panel._trees["stored"].clear()
+    assert "Select a code" in panel._guidance_pane.toHtml()
+
+
+def test_trouble_panel_shows_freeze_context_with_record(qapp):
+    from autodiag.services.record import ScanRecord
+
+    record = ScanRecord()
+    record.record_event("freeze_all", (0, {0x0D: 0.0}))
+    panel = TroubleCodesPanel(ObdWorker(), record=record)
+    panel.on_dtcs("stored", ["P0301"])
+
+    tree = panel._trees["stored"]
+    tree.setCurrentItem(tree.topLevelItem(0))
+    assert "stationary" in panel._guidance_pane.toHtml()

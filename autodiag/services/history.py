@@ -200,8 +200,19 @@ def describe_report(report: dict[str, Any]) -> str:
             if entry.get("description"):
                 line += f" — {entry['description']}"
             lines.append(line)
-    if not any_dtc:
+    if any_dtc:
+        with_advice = sum(
+            1
+            for entries in (report.get("dtcs") or {}).values()
+            for entry in entries
+            if (entry.get("guidance") or {}).get("source") in ("code", "family")
+        )
+        total = sum(len(entries) for entries in (report.get("dtcs") or {}).values())
+        lines.append(f"Guidance: {with_advice} of {total} code(s) with advice")
+    else:
         lines.append("No trouble codes recorded.")
+    for hint in (report.get("advice") or {}).get("hints") or []:
+        lines.append(f"  When set: {hint}")
 
     tests = report.get("mode06") or []
     if tests:

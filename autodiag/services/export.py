@@ -14,6 +14,7 @@ from autodiag import __version__
 from autodiag.obd import dictionary, framing
 from autodiag.obd.pids import PID_REGISTRY
 from autodiag.obd.uds import UdsResponse, describe_response
+from autodiag.services.guidance import guidance_for, hints_for
 from autodiag.services.record import ScanRecord
 
 
@@ -40,7 +41,11 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
 
     dtcs = {
         source: [
-            {"code": code, "description": dictionary.describe(code)}
+            {
+                "code": code,
+                "description": dictionary.describe(code),
+                "guidance": _guidance_dict(code),
+            }
             for code in codes
         ]
         for source, codes in record.dtcs.items()
@@ -150,10 +155,16 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
         "uds": uds,
         "work_order": {},
         "live_data": pids,
+        "advice": {"hints": hints_for(record)},
     }
     if record.log_file:
         report["live_log"] = {"file": record.log_file, "rows": record.log_rows}
     return report
+
+
+def _guidance_dict(code: str) -> dict[str, Any] | None:
+    guidance = guidance_for(code)
+    return guidance.as_dict() if guidance is not None else None
 
 
 def report_to_json(report: dict[str, Any]) -> str:
@@ -200,9 +211,21 @@ def report_to_csv(report: dict[str, Any]) -> str:
             )
             add("readiness", "monitor", mon["name"], state)
 
-    for source, codes in report["dtcs"].items():
-        for entry in codes:
-            add(f"dtc.{source}", entry["code"], "", entry["description"] or "")
+    for source, entries in report["dtcs"].items():
+        for entry in entries:
+            code = entry["code"]
+            add(f"dtc.{source}", code, "", entry["description"] or "")
+            guidance = entry.get("guidance") or {}
+            if guidance:
+                add(f"dtc.{source}", f"{code}.severity", "", guidance["severity"])
+                for index, text in enumerate(guidance["causes"]):
+                    add(f"dtc.{source}", f"{code}.cause[{index}]", "", text)
+                for index, text in enumerate(guidance["checks"]):
+                    add(f"dtc.{source}", f"{code}.check[{index}]", "", text)
+
+    advice = report.get("advice") or {}
+    for index, hint in enumerate(advice.get("hints") or []):
+        add("advice", f"hint[{index}]", "", hint)
 
     for item in report["freeze_frame"]:
         add(
@@ -482,12 +505,44 @@ def report_to_html(report: dict[str, Any]) -> str:
     for source, entries in dtcs.items():
         if not entries:
             continue
-        rows = [
-            [f"<b>{h(entry.get('code'))}</b>", h(entry.get("description"))]
-            for entry in entries
-        ]
+        rows = []
+        for entry in entries:
+            rows.append([f"<b>{h(entry.get('code'))}</b>", h(entry.get("description"))])
+            guidance = entry.get("guidance") or {}
+            if guidance:
+                severity = guidance.get("severity") or ""
+                rows.append(["Severity", h(severity)])
+                causes = guidance.get("causes") or []
+                checks = guidance.get("checks") or []
+                if causes:
+                    rows.append(
+                        [
+                            "Likely causes",
+                            "<ul>" + "".join(f"<li>{h(item)}</li>" for item in causes) + "</ul>",
+                        ]
+                    )
+                if checks:
+                    rows.append(
+                        [
+                            "First checks",
+                            "<ul>" + "".join(f"<li>{h(item)}</li>" for item in checks) + "</ul>",
+                        ]
+                    )
         parts.append(
-            section(f"Trouble codes — {h(source)}", table(["Code", "Description"], rows))
+            section(
+                f"Trouble codes — {h(source)}",
+                table(["Code", "Detail"], rows),
+            )
+        )
+
+    advice = report.get("advice") or {}
+    hints = advice.get("hints") or []
+    if hints:
+        parts.append(
+            section(
+                "When the faults were set",
+                "<ul>" + "".join(f"<li>{h(hint)}</li>" for hint in hints) + "</ul>",
+            )
         )
 
     freeze = report.get("freeze_frame") or []

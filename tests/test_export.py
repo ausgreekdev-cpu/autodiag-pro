@@ -21,6 +21,7 @@ from autodiag.services.export import (
     report_to_json,
     write_report,
 )
+from autodiag.services.history import describe_report
 from autodiag.services.record import ScanRecord
 
 _NOW = datetime(2026, 1, 1, tzinfo=UTC)
@@ -291,3 +292,45 @@ def test_report_text_rejects_pdf_suffix():
     with pytest.raises(ValueError) as excinfo:
         report_text(report, ".pdf")
     assert "app" in str(excinfo.value)
+
+
+# -- repair guidance (M33) ---------------------------------------------------------
+
+
+def test_build_report_includes_guidance():
+    report = build_report(make_record())
+    stored = report["dtcs"]["stored"]
+    assert stored[0]["guidance"]["severity"] == "high"
+    assert stored[0]["guidance"]["source"] == "code"
+    assert stored[0]["guidance"]["causes"]
+
+
+def test_report_advice_hints_from_freeze():
+    record = make_record()
+    record.record_event("freeze_all", (0, {0x05: 50.0}))
+    report = build_report(record)
+    assert any("50°C" in hint for hint in report["advice"]["hints"])
+
+
+def test_html_shows_guidance_and_hints():
+    record = make_record()
+    record.record_event("freeze_all", (0, {0x0D: 0.0}))
+    html = report_to_html(build_report(record))
+    assert "Likely causes" in html
+    assert "First checks" in html
+    assert "When the faults were set" in html
+    assert "stationary" in html
+
+
+def test_csv_guidance_rows():
+    csv_text = report_to_csv(build_report(make_record()))
+    assert "dtc.stored,P0301.severity,,high" in csv_text
+    assert "dtc.stored,P0301.cause[0]," in csv_text
+    assert "dtc.stored,P0301.check[0]," in csv_text
+
+
+def test_describe_report_guidance_line():
+    record = make_record()
+    record.record_event("dtcs", ("stored", ["P0301", "P9999"]))
+    description = describe_report(build_report(record))
+    assert "Guidance: 1 of 2 code(s) with advice" in description

@@ -151,7 +151,7 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._dashboard = DashboardPanel(self.worker, self._prefs)
         self._stack.addWidget(self._dashboard)
-        self._stack.addWidget(TroubleCodesPanel(self.worker))
+        self._stack.addWidget(TroubleCodesPanel(self.worker, record=self.record))
         self._stack.addWidget(ReadinessPanel(self.worker))
         self._stack.addWidget(FreezeFramePanel(self.worker))
         self._stack.addWidget(

@@ -30,7 +30,9 @@ port (USB cable or paired Bluetooth SPP dongle).
   event list you can export as CSV (thresholds persist across launches)
 - **Trouble codes** — read stored (`03`), pending (`07`) and permanent (`0A`) DTCs
   with plain-English descriptions (10,497-code bundled dictionary); clear codes (`04`,
-  MIL off) with confirmation
+  MIL off) with confirmation; select a code for **local repair guidance** — likely
+  causes, first checks, and the freeze-frame conditions when it was set (offline
+  heuristics, included in reports)
 - **Readiness monitors** — I/M status: check emissions readiness before a smog test
 - **Freeze frame** — sensor snapshot captured when a fault was set (`02`), with a
   frame 0/1/2 picker
@@ -156,6 +158,7 @@ stays offline — key checks are local Ed25519 verification.
 | 30. Freemium licensing + EULA (v0.23.0) | done |
 | 31. VIN decode + NHTSA recall lookup (v0.23.0) | done |
 | 32. Batched multi-PID polling + STN profile (v0.23.0) | done |
+| 33. Local guided repair advice (v0.23.0) | done |
 
 ## Install & run
 

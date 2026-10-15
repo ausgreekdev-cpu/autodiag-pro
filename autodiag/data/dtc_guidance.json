@@ -1,0 +1,2067 @@
+{
+  "codes": {
+    "P0300": {
+      "severity": "high",
+      "causes": [
+        "Worn spark plugs",
+        "Weak or failed ignition coil(s)",
+        "Failing fuel injector(s)",
+        "Vacuum leak",
+        "Low fuel pressure",
+        "Carbon-fouled intake valves (direct injection)"
+      ],
+      "checks": [
+        "Inspect spark plugs for wear, gap and fouling",
+        "Swap ignition coils between cylinders and re-scan for a moved code",
+        "Check fuel injector balance with a scan tool",
+        "Smoke-test the intake for vacuum leaks",
+        "Verify fuel pressure at the rail"
+      ]
+    },
+    "P0301": {
+      "severity": "high",
+      "causes": [
+        "Worn or incorrectly gapped spark plug on cylinder 1",
+        "Failed ignition coil for cylinder 1",
+        "Fueling problem at injector 1 (clogged or leaking)",
+        "Compression loss in cylinder 1 (valve, ring or head gasket)"
+      ],
+      "checks": [
+        "Inspect the spark plug for cylinder 1",
+        "Swap the coil with another cylinder — if the code moves, replace the coil",
+        "Test injector 1 resistance and spray pattern",
+        "Perform a compression test if the above check out"
+      ]
+    },
+    "P0302": {
+      "severity": "high",
+      "causes": [
+        "Worn or incorrectly gapped spark plug on cylinder 2",
+        "Failed ignition coil for cylinder 2",
+        "Fueling problem at injector 2 (clogged or leaking)",
+        "Compression loss in cylinder 2 (valve, ring or head gasket)"
+      ],
+      "checks": [
+        "Inspect the spark plug for cylinder 2",
+        "Swap the coil with another cylinder — if the code moves, replace the coil",
+        "Test injector 2 resistance and spray pattern",
+        "Perform a compression test if the above check out"
+      ]
+    },
+    "P0303": {
+      "severity": "high",
+      "causes": [
+        "Worn or incorrectly gapped spark plug on cylinder 3",
+        "Failed ignition coil for cylinder 3",
+        "Fueling problem at injector 3 (clogged or leaking)",
+        "Compression loss in cylinder 3 (valve, ring or head gasket)"
+      ],
+      "checks": [
+        "Inspect the spark plug for cylinder 3",
+        "Swap the coil with another cylinder — if the code moves, replace the coil",
+        "Test injector 3 resistance and spray pattern",
+        "Perform a compression test if the above check out"
+      ]
+    },
+    "P0304": {
+      "severity": "high",
+      "causes": [
+        "Worn or incorrectly gapped spark plug on cylinder 4",
+        "Failed ignition coil for cylinder 4",
+        "Fueling problem at injector 4 (clogged or leaking)",
+        "Compression loss in cylinder 4 (valve, ring or head gasket)"
+      ],
+      "checks": [
+        "Inspect the spark plug for cylinder 4",
+        "Swap the coil with another cylinder — if the code moves, replace the coil",
+        "Test injector 4 resistance and spray pattern",
+        "Perform a compression test if the above check out"
+      ]
+    },
+    "P0171": {
+      "severity": "medium",
+      "causes": [
+        "Vacuum leak (intake gasket, PCV hose, brake booster)",
+        "Dirty or failed MAF sensor",
+        "Weak fuel pump or clogged fuel filter",
+        "Exhaust leak before the upstream O2 sensor",
+        "Failing upstream O2 sensor"
+      ],
+      "checks": [
+        "Smoke-test intake and EVAP hoses for leaks",
+        "Clean the MAF sensor with MAF cleaner and re-check fuel trims",
+        "Compare short-term and long-term fuel trims at 2500 rpm",
+        "Check fuel pressure and volume under load"
+      ]
+    },
+    "P0172": {
+      "severity": "medium",
+      "causes": [
+        "Leaking fuel injector(s)",
+        "Faulty fuel pressure regulator",
+        "Dirty MAF sensor under-reading airflow",
+        "Excessive fuel pressure"
+      ],
+      "checks": [
+        "Confirm the rich condition with fuel trims",
+        "Inspect injectors for leakage (balance test)",
+        "Check fuel pressure and the regulator vacuum line for fuel",
+        "Clean the MAF sensor"
+      ]
+    },
+    "P0174": {
+      "severity": "medium",
+      "causes": [
+        "Vacuum leak on bank 2 (intake gasket, PCV hose)",
+        "Dirty or failed MAF sensor",
+        "Weak fuel pump or clogged fuel filter",
+        "Exhaust leak before the bank 2 upstream O2 sensor"
+      ],
+      "checks": [
+        "Smoke-test intake and EVAP hoses for leaks",
+        "Clean the MAF sensor and re-check fuel trims",
+        "Compare short-term and long-term fuel trims at 2500 rpm",
+        "Check fuel pressure and volume under load"
+      ]
+    },
+    "P0420": {
+      "severity": "medium",
+      "causes": [
+        "Aged or failed catalytic converter (most common)",
+        "Exhaust leak before the downstream O2 sensor",
+        "Persistent misfires damaging the catalyst",
+        "Failing downstream O2 sensor"
+      ],
+      "checks": [
+        "Repair misfires first — running damage kills converters",
+        "Compare upstream vs. downstream O2 sensor waveforms",
+        "Check for exhaust leaks at the manifold and flex pipe",
+        "Run a catalyst temperature test with a scan tool"
+      ]
+    },
+    "P0440": {
+      "severity": "low",
+      "causes": [
+        "Loose or missing fuel cap",
+        "Cracked EVAP hose or faulty purge valve",
+        "Failed vent valve or charcoal canister",
+        "Leaking fuel tank or filler neck"
+      ],
+      "checks": [
+        "Tighten or replace the fuel cap and clear the code — most common fix",
+        "Smoke-test the EVAP system for leaks",
+        "Check purge valve and vent valve operation"
+      ]
+    },
+    "P0442": {
+      "severity": "low",
+      "causes": [
+        "Cracked EVAP hose",
+        "Faulty purge or vent solenoid",
+        "Failing charcoal canister",
+        "Small leak at the fuel tank seal"
+      ],
+      "checks": [
+        "Smoke-test with an EVAP machine to find the small leak",
+        "Inspect EVAP hoses at the canister and purge valve"
+      ]
+    },
+    "P0113": {
+      "severity": "medium",
+      "causes": [
+        "Failed intake air temperature sensor",
+        "Short in the IAT wiring",
+        "Poor connector contact"
+      ],
+      "checks": [
+        "Check IAT sensor resistance against a temperature chart",
+        "Inspect the connector for corrosion"
+      ]
+    },
+    "P0118": {
+      "severity": "medium",
+      "causes": [
+        "Failed engine coolant temperature sensor",
+        "Open in the ECT wiring or connector",
+        "Low coolant level"
+      ],
+      "checks": [
+        "Verify coolant level first",
+        "Check ECT resistance against a temperature chart",
+        "Inspect the connector"
+      ]
+    },
+    "P0135": {
+      "severity": "medium",
+      "causes": [
+        "Failed O2 sensor heater element",
+        "Blown heater fuse",
+        "Damaged heater wiring"
+      ],
+      "checks": [
+        "Check the O2 heater fuse",
+        "Measure heater resistance at the sensor connector",
+        "Inspect wiring for chafing near the exhaust"
+      ]
+    },
+    "P0130": {
+      "severity": "medium",
+      "causes": [
+        "Failing oxygen sensor",
+        "Corroded O2 connector",
+        "Wiring damage from exhaust heat"
+      ],
+      "checks": [
+        "Inspect the O2 sensor connector for corrosion",
+        "Check live data for a lazy or flat signal"
+      ]
+    },
+    "P0141": {
+      "severity": "medium",
+      "causes": [
+        "Failed O2 sensor heater element (bank 1 sensor 2)",
+        "Blown heater fuse",
+        "Damaged heater wiring"
+      ],
+      "checks": [
+        "Check the O2 heater fuse",
+        "Measure heater resistance at the sensor connector"
+      ]
+    },
+    "P0155": {
+      "severity": "medium",
+      "causes": [
+        "Failed O2 sensor heater element (bank 2 sensor 1)",
+        "Blown heater fuse",
+        "Damaged heater wiring"
+      ],
+      "checks": [
+        "Check the O2 heater fuse",
+        "Measure heater resistance at the sensor connector"
+      ]
+    },
+    "P0161": {
+      "severity": "medium",
+      "causes": [
+        "Failed O2 sensor heater element (bank 2 sensor 2)",
+        "Blown heater fuse",
+        "Damaged heater wiring"
+      ],
+      "checks": [
+        "Check the O2 heater fuse",
+        "Measure heater resistance at the sensor connector"
+      ]
+    },
+    "P0175": {
+      "severity": "low",
+      "causes": [
+        "Failing O2 sensor (bank 2 sensor 1)",
+        "Wiring or connector fault"
+      ],
+      "checks": [
+        "Inspect the O2 sensor connector",
+        "Check live data for a lazy signal"
+      ]
+    },
+    "P0401": {
+      "severity": "medium",
+      "causes": [
+        "Carbon-clogged EGR passages",
+        "Failed EGR valve",
+        "EGR solenoid or vacuum problem",
+        "Blocked EGR tube"
+      ],
+      "checks": [
+        "Remove and clean the EGR passages",
+        "Command the EGR valve open with a scan tool and watch flow",
+        "Check EGR vacuum or electrical supply"
+      ]
+    },
+    "P0101": {
+      "severity": "medium",
+      "causes": [
+        "Dirty MAF sensor",
+        "Air leak between the MAF and throttle (post-MAF leak)",
+        "Failing MAF sensor",
+        "Dirty air filter"
+      ],
+      "checks": [
+        "Replace or clean the air filter first",
+        "Clean the MAF sensing element with MAF cleaner",
+        "Inspect intake ducting after the MAF for leaks"
+      ]
+    },
+    "P0128": {
+      "severity": "low",
+      "causes": [
+        "Stuck-open thermostat",
+        "Low coolant level",
+        "Failed ECT sensor (less common)"
+      ],
+      "checks": [
+        "Check coolant level",
+        "Verify the engine reaches operating temperature"
+      ]
+    },
+    "P0500": {
+      "severity": "low",
+      "causes": [
+        "Failed vehicle speed sensor",
+        "Damaged wiring or tone ring",
+        "Connector corrosion"
+      ],
+      "checks": [
+        "Check speedometer behavior",
+        "Scope the VSS signal"
+      ]
+    },
+    "P0700": {
+      "severity": "info",
+      "causes": [
+        "An internal transmission fault code is stored",
+        "Transmission solenoid or sensor issue"
+      ],
+      "checks": [
+        "Read transmission-specific codes with a capable scan tool",
+        "Check transmission fluid level and condition"
+      ]
+    },
+    "P0335": {
+      "severity": "medium",
+      "causes": [
+        "Failed crankshaft position sensor",
+        "Damaged wiring or connector",
+        "Reluctor ring damage or debris"
+      ],
+      "checks": [
+        "Check the sensor gap and mounting",
+        "Scope the CKP signal while cranking",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0340": {
+      "severity": "medium",
+      "causes": [
+        "Failed camshaft position sensor",
+        "Damaged wiring or connector",
+        "Timing chain/belt jump"
+      ],
+      "checks": [
+        "Scope the CMP signal",
+        "Inspect the wiring and connector",
+        "Verify timing marks if the signal is missing"
+      ]
+    },
+    "P0351": {
+      "severity": "medium",
+      "causes": [
+        "Failed ignition coil (primary/secondary circuit)",
+        "Damaged coil wiring or connector",
+        "Failed ignition driver in the ECU (less common)"
+      ],
+      "checks": [
+        "Swap the coil with another cylinder and re-scan",
+        "Check coil power and ground at the connector",
+        "Inspect the coil connector for corrosion"
+      ]
+    },
+    "P0200": {
+      "severity": "medium",
+      "causes": [
+        "Failing fuel injector",
+        "Damaged injector wiring or connector",
+        "Failed injector driver in the ECU (less common)"
+      ],
+      "checks": [
+        "Check injector resistance",
+        "Noid-light the injector harness while cranking",
+        "Inspect the connector for corrosion"
+      ]
+    },
+    "P0230": {
+      "severity": "medium",
+      "causes": [
+        "Failed fuel pump",
+        "Blown fuel pump fuse or relay",
+        "Damaged fuel pump wiring"
+      ],
+      "checks": [
+        "Check the fuel pump fuse and relay",
+        "Listen for pump prime at key-on",
+        "Check fuel pressure at the rail"
+      ]
+    },
+    "P0261": {
+      "severity": "medium",
+      "causes": [
+        "Shorted injector 1 (circuit low)",
+        "Damaged injector wiring",
+        "Failed injector driver in the ECU (less common)"
+      ],
+      "checks": [
+        "Check injector 1 resistance",
+        "Inspect the injector wiring for shorts"
+      ]
+    },
+    "P0402": {
+      "severity": "medium",
+      "causes": [
+        "Stuck-open EGR valve",
+        "Failed EGR solenoid",
+        "EGR control wiring fault"
+      ],
+      "checks": [
+        "Command the EGR valve closed with a scan tool",
+        "Check EGR vacuum or electrical supply"
+      ]
+    },
+    "P0410": {
+      "severity": "medium",
+      "causes": [
+        "Failed secondary air injection pump",
+        "Stuck air check valve",
+        "Damaged air pump wiring or relay"
+      ],
+      "checks": [
+        "Listen for the air pump at cold start",
+        "Check the air pump fuse and relay",
+        "Inspect the air hoses and check valve"
+      ]
+    },
+    "P0455": {
+      "severity": "low",
+      "causes": [
+        "Loose or missing fuel cap",
+        "Cracked EVAP hose",
+        "Failed purge valve stuck open"
+      ],
+      "checks": [
+        "Tighten or replace the fuel cap",
+        "Smoke-test the EVAP system for the gross leak"
+      ]
+    },
+    "P0460": {
+      "severity": "low",
+      "causes": [
+        "Failed fuel level sensor",
+        "Damaged sender wiring",
+        "Instrument cluster issue (less common)"
+      ],
+      "checks": [
+        "Check fuel gauge behavior",
+        "Measure sender resistance at the tank connector"
+      ]
+    },
+    "P0480": {
+      "severity": "low",
+      "causes": [
+        "Failed cooling fan",
+        "Blown fan fuse or relay",
+        "Damaged fan wiring"
+      ],
+      "checks": [
+        "Check the fan fuse and relay",
+        "Command the fan on with a scan tool"
+      ]
+    },
+    "P0505": {
+      "severity": "low",
+      "causes": [
+        "Failed idle air control valve",
+        "Carbon-clogged idle passages",
+        "IAC wiring or connector fault"
+      ],
+      "checks": [
+        "Clean the idle air passages",
+        "Command the IAC with a scan tool and watch rpm"
+      ]
+    },
+    "P0560": {
+      "severity": "medium",
+      "causes": [
+        "Low system voltage (battery/alternator)",
+        "Poor ground connection",
+        "Failed ECU power supply (less common)"
+      ],
+      "checks": [
+        "Check battery voltage and charging voltage",
+        "Inspect ground straps and battery terminals"
+      ]
+    },
+    "P0562": {
+      "severity": "low",
+      "causes": [
+        "Weak battery",
+        "Failed alternator",
+        "Poor battery terminal connection"
+      ],
+      "checks": [
+        "Load-test the battery",
+        "Check charging voltage"
+      ]
+    },
+    "P0600": {
+      "severity": "low",
+      "causes": [
+        "Intermittent communication between control modules",
+        "Poor module power or ground",
+        "Damaged communication wiring"
+      ],
+      "checks": [
+        "Check module power and ground connections",
+        "Inspect the communication bus wiring"
+      ]
+    },
+    "P0601": {
+      "severity": "medium",
+      "causes": [
+        "Failed EEPROM or memory in the ECU",
+        "Low voltage during a write cycle",
+        "ECU internal fault"
+      ],
+      "checks": [
+        "Check battery and charging voltage",
+        "Re-flash or replace the ECU if the code returns"
+      ]
+    },
+    "P0606": {
+      "severity": "high",
+      "causes": [
+        "Failed ECU/PCM processor",
+        "Internal ECU hardware fault"
+      ],
+      "checks": [
+        "Check ECU power and ground first",
+        "Replace or re-flash the ECU if the code persists"
+      ]
+    },
+    "P0620": {
+      "severity": "low",
+      "causes": [
+        "Failed generator/alternator control",
+        "Damaged generator wiring",
+        "Failed voltage regulator"
+      ],
+      "checks": [
+        "Check charging voltage",
+        "Inspect the generator control wiring"
+      ]
+    },
+    "P0630": {
+      "severity": "low",
+      "causes": [
+        "VIN not programmed into the ECU",
+        "Replacement ECU not configured"
+      ],
+      "checks": [
+        "Program the VIN with a capable scan tool"
+      ]
+    },
+    "P0640": {
+      "severity": "low",
+      "causes": [
+        "Failed intake manifold pressure sensor",
+        "Damaged MAP wiring or connector",
+        "Vacuum leak"
+      ],
+      "checks": [
+        "Check MAP sensor vacuum supply",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0650": {
+      "severity": "low",
+      "causes": [
+        "MIL bulb or driver circuit fault",
+        "Failed ECU output (less common)"
+      ],
+      "checks": [
+        "Check the MIL bulb and its circuit"
+      ]
+    },
+    "P0660": {
+      "severity": "low",
+      "causes": [
+        "Failed intake manifold tuning valve",
+        "Damaged MTV wiring or connector"
+      ],
+      "checks": [
+        "Command the MTV with a scan tool",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0670": {
+      "severity": "low",
+      "causes": [
+        "Failed intake manifold tuning valve (bank 1)",
+        "Damaged MTV wiring or connector"
+      ],
+      "checks": [
+        "Command the MTV with a scan tool",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0680": {
+      "severity": "low",
+      "causes": [
+        "Failed glow plug or glow plug control module",
+        "Damaged glow plug wiring",
+        "Blown glow plug fuse"
+      ],
+      "checks": [
+        "Check the glow plug fuse",
+        "Measure glow plug resistance"
+      ]
+    },
+    "P0690": {
+      "severity": "low",
+      "causes": [
+        "Failed cooling fan 2",
+        "Blown fan fuse or relay",
+        "Damaged fan wiring"
+      ],
+      "checks": [
+        "Check the fan fuse and relay",
+        "Command the fan on with a scan tool"
+      ]
+    },
+    "P0705": {
+      "severity": "medium",
+      "causes": [
+        "Failed transmission range sensor (PRNDL)",
+        "Damaged TR wiring or connector",
+        "Misadjusted shifter linkage"
+      ],
+      "checks": [
+        "Verify gear indicator matches the shifter position",
+        "Check the TR sensor connector"
+      ]
+    },
+    "P0710": {
+      "severity": "medium",
+      "causes": [
+        "Failed transmission fluid temperature sensor",
+        "Damaged TFT wiring or connector"
+      ],
+      "checks": [
+        "Check TFT resistance against a temperature chart",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0715": {
+      "severity": "medium",
+      "causes": [
+        "Failed input/turbine speed sensor",
+        "Damaged ISS wiring or connector"
+      ],
+      "checks": [
+        "Scope the ISS signal",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0720": {
+      "severity": "medium",
+      "causes": [
+        "Failed output speed sensor",
+        "Damaged OSS wiring or connector"
+      ],
+      "checks": [
+        "Scope the OSS signal",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0730": {
+      "severity": "medium",
+      "causes": [
+        "Incorrect gear ratio (solenoid or mechanical)",
+        "Failed shift solenoid",
+        "Low or degraded transmission fluid"
+      ],
+      "checks": [
+        "Check transmission fluid level and condition",
+        "Read transmission-specific codes with a capable scan tool"
+      ]
+    },
+    "P0740": {
+      "severity": "medium",
+      "causes": [
+        "Failed torque converter clutch solenoid",
+        "Damaged TCC wiring",
+        "Internal transmission valve body issue"
+      ],
+      "checks": [
+        "Command the TCC on with a scan tool",
+        "Check transmission fluid level and condition"
+      ]
+    },
+    "P0750": {
+      "severity": "medium",
+      "causes": [
+        "Failed shift solenoid A",
+        "Damaged solenoid wiring or connector"
+      ],
+      "checks": [
+        "Check solenoid resistance",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0760": {
+      "severity": "low",
+      "causes": [
+        "Failed shift solenoid C",
+        "Damaged solenoid wiring or connector"
+      ],
+      "checks": [
+        "Check solenoid resistance",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0770": {
+      "severity": "low",
+      "causes": [
+        "Failed shift solenoid E",
+        "Damaged solenoid wiring or connector"
+      ],
+      "checks": [
+        "Check solenoid resistance",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0780": {
+      "severity": "medium",
+      "causes": [
+        "Shift timing malfunction",
+        "Failed shift solenoid",
+        "Low or degraded transmission fluid"
+      ],
+      "checks": [
+        "Check transmission fluid level and condition",
+        "Read transmission-specific codes with a capable scan tool"
+      ]
+    },
+    "P0800": {
+      "severity": "low",
+      "causes": [
+        "Failed transfer case control module",
+        "Damaged transfer case wiring"
+      ],
+      "checks": [
+        "Read transfer case codes with a capable scan tool",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0830": {
+      "severity": "low",
+      "causes": [
+        "Failed clutch switch",
+        "Damaged clutch switch wiring"
+      ],
+      "checks": [
+        "Check the clutch switch operation",
+        "Inspect the wiring"
+      ]
+    },
+    "P0860": {
+      "severity": "low",
+      "causes": [
+        "Communication bus fault",
+        "Poor module power or ground",
+        "Damaged communication wiring"
+      ],
+      "checks": [
+        "Check module power and ground connections",
+        "Inspect the communication bus wiring"
+      ]
+    },
+    "P0890": {
+      "severity": "low",
+      "causes": [
+        "Failed transmission fluid pressure sensor",
+        "Damaged TFP wiring or connector"
+      ],
+      "checks": [
+        "Check TFP resistance",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0900": {
+      "severity": "low",
+      "causes": [
+        "Failed clutch actuator",
+        "Damaged actuator wiring or connector"
+      ],
+      "checks": [
+        "Check the actuator resistance",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0910": {
+      "severity": "low",
+      "causes": [
+        "Failed actuator circuit",
+        "Damaged actuator wiring or connector"
+      ],
+      "checks": [
+        "Check the actuator resistance",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P0920": {
+      "severity": "low",
+      "causes": [
+        "Failed gear shift actuator",
+        "Damaged shift actuator wiring"
+      ],
+      "checks": [
+        "Check the actuator resistance",
+        "Inspect the wiring"
+      ]
+    },
+    "P0930": {
+      "severity": "low",
+      "causes": [
+        "Failed hydraulic pressure sensor",
+        "Damaged pressure sensor wiring"
+      ],
+      "checks": [
+        "Check the sensor resistance",
+        "Inspect the wiring"
+      ]
+    },
+    "P0940": {
+      "severity": "low",
+      "causes": [
+        "Failed hydraulic unit",
+        "Damaged hydraulic unit wiring"
+      ],
+      "checks": [
+        "Check the hydraulic unit resistance",
+        "Inspect the wiring"
+      ]
+    },
+    "P0950": {
+      "severity": "low",
+      "causes": [
+        "Failed hydraulic unit power relay",
+        "Damaged relay wiring"
+      ],
+      "checks": [
+        "Check the relay and its wiring"
+      ]
+    },
+    "P0960": {
+      "severity": "low",
+      "causes": [
+        "Failed pressure control solenoid",
+        "Damaged solenoid wiring"
+      ],
+      "checks": [
+        "Check solenoid resistance",
+        "Inspect the wiring"
+      ]
+    },
+    "P0970": {
+      "severity": "low",
+      "causes": [
+        "Failed transmission fluid temperature sensor",
+        "Damaged TFT wiring"
+      ],
+      "checks": [
+        "Check TFT resistance",
+        "Inspect the wiring"
+      ]
+    },
+    "P0980": {
+      "severity": "low",
+      "causes": [
+        "Failed shift solenoid",
+        "Damaged solenoid wiring"
+      ],
+      "checks": [
+        "Check solenoid resistance",
+        "Inspect the wiring"
+      ]
+    },
+    "P0990": {
+      "severity": "low",
+      "causes": [
+        "Failed shift solenoid F",
+        "Damaged solenoid wiring"
+      ],
+      "checks": [
+        "Check solenoid resistance",
+        "Inspect the wiring"
+      ]
+    },
+    "P1000": {
+      "severity": "low",
+      "causes": [
+        "Vehicle communication self-test not completed",
+        "Intermittent module communication"
+      ],
+      "checks": [
+        "Complete a drive cycle and re-scan",
+        "Check module power and ground if it returns"
+      ]
+    },
+    "P1100": {
+      "severity": "medium",
+      "causes": [
+        "Failed HO2S heater circuit",
+        "Damaged heater wiring"
+      ],
+      "checks": [
+        "Check the O2 heater fuse",
+        "Measure heater resistance"
+      ]
+    },
+    "P1200": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific fuel system fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring for the fuel system"
+      ]
+    },
+    "P1300": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ignition fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P1400": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific emissions fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring for the emissions system"
+      ]
+    },
+    "P1500": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific speed/anti-theft fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring"
+      ]
+    },
+    "P1600": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/immobilizer fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring"
+      ]
+    },
+    "P1700": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific transmission fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check transmission fluid level and condition"
+      ]
+    },
+    "P1800": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific crank/cam correlation fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect crank/cam sensor wiring"
+      ]
+    },
+    "P1900": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific boost/overrun fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring"
+      ]
+    },
+    "P2000": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific intake/emissions fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring"
+      ]
+    },
+    "P2100": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific throttle/actuator fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect throttle wiring and connectors"
+      ]
+    },
+    "P2200": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific O2 sensor fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect O2 sensor wiring and connectors"
+      ]
+    },
+    "P2300": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ignition/injector fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P2400": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific EVAP/EGR fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect EVAP/EGR wiring and connectors"
+      ]
+    },
+    "P2500": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific charging/voltage fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check charging voltage"
+      ]
+    },
+    "P2600": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/memory fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P2700": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific transmission solenoid fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check transmission fluid level and condition"
+      ]
+    },
+    "P2800": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific transmission fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check transmission fluid level and condition"
+      ]
+    },
+    "P2900": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific transmission fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check transmission fluid level and condition"
+      ]
+    },
+    "P3000": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ignition system fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P3100": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific fuel system fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect fuel system wiring and connectors"
+      ]
+    },
+    "P3200": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ignition/injector fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P3300": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific misfire/ignition fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P3400": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific cylinder deactivation fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring"
+      ]
+    },
+    "P3500": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ignition/injector fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P3600": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ignition/injector fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P3700": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ignition/injector fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P3800": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ignition/injector fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P3900": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ignition/injector fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P4000": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific emissions fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring"
+      ]
+    },
+    "P4100": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific fuel/air fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring"
+      ]
+    },
+    "P4200": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific emissions fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring"
+      ]
+    },
+    "P4300": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ignition/misfire fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P4400": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific EVAP fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect EVAP wiring and connectors"
+      ]
+    },
+    "P4500": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific EVAP/EGR fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect EVAP/EGR wiring and connectors"
+      ]
+    },
+    "P4600": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific fuel level/tank fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect fuel level sender wiring"
+      ]
+    },
+    "P4700": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific EVAP/intake fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring"
+      ]
+    },
+    "P4800": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific intake/air fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect intake wiring and connectors"
+      ]
+    },
+    "P4900": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific emissions fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect connectors and wiring"
+      ]
+    },
+    "P5000": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific speed/vehicle fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect speed sensor wiring"
+      ]
+    },
+    "P5100": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific brake/booster fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect brake system wiring"
+      ]
+    },
+    "P5200": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific fuel/injector fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect injector wiring and connectors"
+      ]
+    },
+    "P5300": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ignition/injector fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect ignition wiring and connectors"
+      ]
+    },
+    "P5400": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific fuel/injector fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect injector wiring and connectors"
+      ]
+    },
+    "P5500": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific idle/speed fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Inspect idle control wiring"
+      ]
+    },
+    "P5600": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P5700": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific transmission fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check transmission fluid level and condition"
+      ]
+    },
+    "P5800": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific transmission fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check transmission fluid level and condition"
+      ]
+    },
+    "P5900": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific transmission fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check transmission fluid level and condition"
+      ]
+    },
+    "P6000": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P6100": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P6200": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P6300": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P6400": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P6500": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P6600": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P6700": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P6800": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P6900": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P7000": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P7100": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P7200": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P7300": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P7400": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P7500": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P7600": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P7700": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P7800": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P7900": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P8000": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P8100": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P8200": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P8300": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P8400": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P8500": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P8600": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P8700": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P8800": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P8900": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P9000": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P9100": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P9200": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P9300": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P9400": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P9500": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P9600": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P9700": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P9800": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    },
+    "P9900": {
+      "severity": "low",
+      "causes": [
+        "Manufacturer-specific ECU/communication fault",
+        "Wiring or connector issue"
+      ],
+      "checks": [
+        "Look up OEM documentation for this code",
+        "Check ECU power and ground"
+      ]
+    }
+  },
+  "families": {
+    "P00": {
+      "severity": "info",
+      "causes": [
+        "Generic SAE powertrain code — the description above identifies the system",
+        "Wiring, connector or sensor fault in the indicated system"
+      ],
+      "checks": [
+        "Inspect connectors and wiring for the indicated system",
+        "Look up OEM service procedures for this exact code"
+      ]
+    },
+    "P01": {
+      "severity": "medium",
+      "causes": [
+        "Fuel or air metering fault (injector, MAF/MAP, fuel pressure)",
+        "Vacuum leak",
+        "Failing sensor in the fuel/air path"
+      ],
+      "checks": [
+        "Check fuel trims with a scan tool",
+        "Smoke-test the intake for vacuum leaks",
+        "Inspect connectors and wiring for the fuel/air system"
+      ]
+    },
+    "P03": {
+      "severity": "high",
+      "causes": [
+        "Ignition system fault (spark plug, coil, injector)",
+        "Vacuum leak",
+        "Compression loss"
+      ],
+      "checks": [
+        "Inspect spark plugs and coils",
+        "Check fuel injector operation",
+        "Smoke-test the intake for vacuum leaks"
+      ]
+    },
+    "P04": {
+      "severity": "low",
+      "causes": [
+        "Auxiliary emissions system fault (EVAP, EGR, secondary air)",
+        "Vacuum or hose leak",
+        "Failed solenoid or valve"
+      ],
+      "checks": [
+        "Smoke-test the EVAP system for leaks",
+        "Inspect hoses and solenoids for the indicated system"
+      ]
+    },
+    "P05": {
+      "severity": "low",
+      "causes": [
+        "Idle control or vehicle speed system fault",
+        "Failed idle air control valve",
+        "Failed vehicle speed sensor"
+      ],
+      "checks": [
+        "Inspect idle control passages and valve",
+        "Check speed sensor wiring"
+      ]
+    },
+    "P06": {
+      "severity": "medium",
+      "causes": [
+        "Computer output circuit fault",
+        "Failed actuator or solenoid",
+        "Damaged wiring or connector"
+      ],
+      "checks": [
+        "Inspect the wiring and connector for the indicated circuit",
+        "Check the actuator or solenoid resistance"
+      ]
+    },
+    "P07": {
+      "severity": "medium",
+      "causes": [
+        "Transmission control system fault",
+        "Failed solenoid or sensor",
+        "Low or degraded transmission fluid"
+      ],
+      "checks": [
+        "Check transmission fluid level and condition",
+        "Read transmission-specific codes with a capable scan tool"
+      ]
+    },
+    "P08": {
+      "severity": "medium",
+      "causes": [
+        "Transmission control system fault",
+        "Failed solenoid or sensor",
+        "Low or degraded transmission fluid"
+      ],
+      "checks": [
+        "Check transmission fluid level and condition",
+        "Read transmission-specific codes with a capable scan tool"
+      ]
+    },
+    "P09": {
+      "severity": "medium",
+      "causes": [
+        "Control module fault",
+        "Failed module or internal circuit",
+        "Damaged wiring or connector"
+      ],
+      "checks": [
+        "Check module power and ground connections",
+        "Inspect the wiring and connector"
+      ]
+    },
+    "P1": {
+      "severity": "info",
+      "causes": [
+        "Manufacturer-specific powertrain code",
+        "Wiring, connector or sensor fault in the indicated system"
+      ],
+      "checks": [
+        "Look up OEM documentation for this exact code",
+        "Inspect connectors and wiring for the indicated system"
+      ]
+    },
+    "P2": {
+      "severity": "info",
+      "causes": [
+        "Manufacturer-specific powertrain code",
+        "Wiring, connector or sensor fault in the indicated system"
+      ],
+      "checks": [
+        "Look up OEM documentation for this exact code",
+        "Inspect connectors and wiring for the indicated system"
+      ]
+    },
+    "P3": {
+      "severity": "info",
+      "causes": [
+        "Manufacturer-specific powertrain code",
+        "Wiring, connector or sensor fault in the indicated system"
+      ],
+      "checks": [
+        "Look up OEM documentation for this exact code",
+        "Inspect connectors and wiring for the indicated system"
+      ]
+    },
+    "U0": {
+      "severity": "medium",
+      "causes": [
+        "Network communication fault between control modules",
+        "Poor module power or ground",
+        "Damaged communication bus wiring"
+      ],
+      "checks": [
+        "Check module power and ground connections",
+        "Inspect the communication bus wiring"
+      ]
+    },
+    "B0": {
+      "severity": "low",
+      "causes": [
+        "Body control module fault",
+        "Failed body system component",
+        "Damaged wiring or connector"
+      ],
+      "checks": [
+        "Inspect connectors and wiring for the indicated body system",
+        "Look up OEM service procedures for this exact code"
+      ]
+    },
+    "C0": {
+      "severity": "low",
+      "causes": [
+        "Chassis control module fault",
+        "Failed chassis system component (ABS, stability, suspension)",
+        "Damaged wiring or connector"
+      ],
+      "checks": [
+        "Inspect connectors and wiring for the indicated chassis system",
+        "Look up OEM service procedures for this exact code"
+      ]
+    }
+  }
+}

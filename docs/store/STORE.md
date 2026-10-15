@@ -57,6 +57,8 @@ four-part version than the previous one (CI takes care of this per tag).
   - UDS (ISO 14229) requests for advanced diagnostics — with safety
     waiver for write services
   - Scan history, HTML/PDF/CSV reports and customer work orders
+  - Local repair guidance — likely causes, first checks and freeze-frame context
+    for stored codes (offline heuristics)
   - VIN decode and open safety-recall lookup via official NHTSA services
     (opt-in, on press)
   - Works fully offline — no accounts, no telemetry; the update check and

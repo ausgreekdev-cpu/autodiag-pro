@@ -1,6 +1,8 @@
-"""Trouble-code panel: stored / pending / permanent DTCs + clear."""
+"""Trouble-code panel: stored / pending / permanent DTCs + clear + local guidance."""
 
 from __future__ import annotations
+
+from html import escape
 
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -9,6 +11,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QTabWidget,
+    QTextEdit,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -16,15 +19,66 @@ from PySide6.QtWidgets import (
 )
 
 from autodiag.obd.dictionary import describe
+from autodiag.services.guidance import guidance_for, hints_for
+from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
 
 _SOURCES = (("stored", "Stored"), ("pending", "Pending"), ("permanent", "Permanent"))
 
+_SEVERITY_COLORS = {
+    "high": "#e5484d",
+    "medium": "#f5a524",
+    "low": "#3e9b4f",
+    "info": "#6b7280",
+}
+
+_PLACEHOLDER = "Select a code to see likely causes and first checks."
+
+
+def _guidance_html(code: str, guidance, hints: list[str]) -> str:
+    description = describe(code) or "Unknown code"
+    parts = [f"<b>{escape(code)}</b> — {escape(description)}"]
+    if guidance is None:
+        parts.append("<p>No guidance available for this code.</p>")
+    else:
+        color = _SEVERITY_COLORS.get(guidance.severity, "#6b7280")
+        parts.append(
+            f'<p>Severity: <span style="color:{color}">'
+            f"<b>{guidance.severity.upper()}</b></span> "
+            f'<span style="color:#888">({guidance.source})</span></p>'
+        )
+        if guidance.causes:
+            parts.append(
+                "<p>Likely causes:</p><ul>"
+                + "".join(f"<li>{escape(item)}</li>" for item in guidance.causes)
+                + "</ul>"
+            )
+        if guidance.checks:
+            parts.append(
+                "<p>First checks:</p><ul>"
+                + "".join(f"<li>{escape(item)}</li>" for item in guidance.checks)
+                + "</ul>"
+            )
+    if hints:
+        parts.append(
+            "<p>When it happened:</p><ul>"
+            + "".join(f"<li>{escape(item)}</li>" for item in hints)
+            + "</ul>"
+        )
+    return "".join(parts)
+
 
 class TroubleCodesPanel(QWidget):
-    def __init__(self, worker: ObdWorker, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        worker: ObdWorker,
+        parent: QWidget | None = None,
+        *,
+        record: ScanRecord | None = None,
+    ) -> None:
         super().__init__(parent)
         self._worker = worker
+        self._record = record
         self._connected = False
         self._trees: dict[str, QTreeWidget] = {}
 
@@ -69,11 +123,18 @@ class TroubleCodesPanel(QWidget):
             tree.setRootIsDecorated(False)
             tree.setColumnWidth(0, 110)
             tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            tree.itemSelectionChanged.connect(self._on_selection_changed)
             tabs.addTab(tree, label)
             self._trees[source] = tree
         tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(tabs, 1)
         self._tabs = tabs
+
+        self._guidance_pane = QTextEdit()
+        self._guidance_pane.setReadOnly(True)
+        self._guidance_pane.setHtml(_PLACEHOLDER)
+        layout.addWidget(self._guidance_pane)
+
         self._set_connected(False)
 
     # -- worker handlers -----------------------------------------------------------
@@ -86,6 +147,7 @@ class TroubleCodesPanel(QWidget):
         for code in codes:
             item = QTreeWidgetItem([code, describe(code) or "Unknown code"])
             tree.addTopLevelItem(item)
+        self._guidance_pane.setHtml(_PLACEHOLDER)
         if source == self._current_source():
             self._update_labels()
 
@@ -105,7 +167,20 @@ class TroubleCodesPanel(QWidget):
     def _on_tab_changed(self, _index: int) -> None:
         if self._connected:
             self._worker.read_dtcs(self._current_source())
-        self._update_labels()
+        self._refresh_guidance()
+
+    def _on_selection_changed(self) -> None:
+        self._refresh_guidance()
+
+    def _refresh_guidance(self) -> None:
+        tree = self._tabs.currentWidget()
+        item = tree.currentItem() if isinstance(tree, QTreeWidget) else None
+        if item is None:
+            self._guidance_pane.setHtml(_PLACEHOLDER)
+            return
+        code = item.text(0)
+        hints = hints_for(self._record) if self._record is not None else []
+        self._guidance_pane.setHtml(_guidance_html(code, guidance_for(code), hints))
 
     def _on_read_clicked(self) -> None:
         self._hint.setText("Reading codes…")
@@ -123,11 +198,11 @@ class TroubleCodesPanel(QWidget):
         if answer == QMessageBox.StandardButton.Yes:
             self._worker.clear_codes()
 
+    def _update_labels(self) -> None:
+        total = sum(tree.topLevelItemCount() for tree in self._trees.values())
+        self._count_label.setText(f"{total} code(s) this session")
+
     def _set_connected(self, connected: bool) -> None:
         self._connected = connected
         self._read_btn.setEnabled(connected)
         self._clear_btn.setEnabled(connected)
-
-    def _update_labels(self) -> None:
-        total = sum(tree.topLevelItemCount() for tree in self._trees.values())
-        self._count_label.setText(f"{total} code(s) this session")
