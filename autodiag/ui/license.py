@@ -170,10 +170,9 @@ class UpgradeDialog(QDialog):
         self._key_btn = QPushButton("Install licence key…")
         self._key_btn.clicked.connect(self._install_key)
         buttons.addWidget(self._key_btn)
-        store_btn = QPushButton("Upgrade in Store…")
-        store_btn.setEnabled(False)
-        store_btn.setToolTip("Store purchases arrive in a later update.")
-        buttons.addWidget(store_btn)
+        self._store_btn = QPushButton("Upgrade in Store…")
+        self._store_btn.clicked.connect(self._open_store)
+        buttons.addWidget(self._store_btn)
         buttons.addStretch(1)
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(self.reject)
@@ -183,6 +182,24 @@ class UpgradeDialog(QDialog):
     def _install_key(self) -> None:
         if install_license_key(self, self._manager):
             self.accept()
+
+    def _open_store(self) -> None:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        from autodiag.ui.prefs import Prefs
+
+        product_id = Prefs().store_product_id()
+        if not product_id:
+            QMessageBox.information(
+                self,
+                "Microsoft Store",
+                "The AutoDiag Pro Store listing is not published yet.\n\n"
+                "Pro and Workshop upgrades are available as licence keys — "
+                "use Install licence key… below.",
+            )
+            return
+        QDesktopServices.openUrl(QUrl(f"ms-windows-store://pdp/?ProductId={product_id}"))
 
 
 def try_unlock(parent: QWidget, manager: LicenseManager, feature: str) -> bool:

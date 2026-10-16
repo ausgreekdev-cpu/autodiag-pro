@@ -129,7 +129,8 @@ reading and clearing codes, CSV/HTML exports, guided basics.
 | Mode $08 active tests | — | — | ✓ |
 
 Unlock with a signed licence key via *Settings → Install licence key…*
-(Microsoft Store purchases arrive with the Store listing). The first launch
+(the *Upgrade in Store…* button deep-links to the Store listing once its
+Product ID is set in Settings). The first launch
 asks you to accept the safety notice & [EULA](docs/eula.md); everything
 stays offline — key checks are local Ed25519 verification.
 

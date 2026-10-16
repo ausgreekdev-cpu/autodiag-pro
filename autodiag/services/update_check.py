@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from autodiag import __version__
+from autodiag.services.store_mode import store_mode
 
 RELEASES_URL = "https://api.github.com/repos/ausgreekdev-cpu/autodiag-pro/releases/latest"
 DEFAULT_TIMEOUT = 5.0
@@ -65,7 +66,16 @@ def check_for_update(
     timeout: float = DEFAULT_TIMEOUT,
     fetch: Fetch | None = None,
 ) -> UpdateCheck:
-    """Check GitHub for a release newer than ``current``; never raises."""
+    """Check GitHub for a release newer than ``current``; never raises.
+
+    In a Store-package runtime the check short-circuits: Microsoft manages
+    delivery, so there is nothing to compare against GitHub.
+    """
+    if store_mode():
+        return UpdateCheck(
+            status="store",
+            message="Updates are installed by the Microsoft Store.",
+        )
     do_fetch = fetch if fetch is not None else fetch_json
     try:
         payload = do_fetch(RELEASES_URL, timeout)

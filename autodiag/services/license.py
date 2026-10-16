@@ -84,7 +84,7 @@ class LicenseState:
     """The outcome of verifying one license file."""
 
     tier: Tier
-    source: str = "default"  # default | key | store (store arrives in M36)
+    source: str = "default"  # default | key | store (Store purchases arrive as keys)
     licensee: str | None = None
     expires: date | None = None
 
@@ -156,6 +156,10 @@ def _load_state(text: str, today: date | None = None) -> LicenseState:
         if expires <= effective_today:
             raise LicenseError("license has expired")
 
+    source = payload.get("source", "key")
+    if source not in ("key", "store"):
+        raise LicenseError(f"unknown license source: {source!r}")
+
     signature = payload.get("sig")
     if not isinstance(signature, str):
         raise LicenseError("license signature is missing")
@@ -169,7 +173,7 @@ def _load_state(text: str, today: date | None = None) -> LicenseState:
         raise LicenseError("license signature is invalid") from exc
 
     return LicenseState(
-        tier, source="key", licensee=licensee.strip(), expires=expires
+        tier, source=source, licensee=licensee.strip(), expires=expires
     )
 
 

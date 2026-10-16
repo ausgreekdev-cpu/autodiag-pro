@@ -115,6 +115,8 @@ jobs:
           MSIX_PUBLISHER: ${{ secrets.MSIX_PUBLISHER }}
           MSIX_PUBLISHER_DISPLAY: ${{ secrets.MSIX_PUBLISHER_DISPLAY }}
         run: python packaging/msix/build_msix.py --dist dist/autodiag-windows-x86_64.exe --out out --pack
+      - name: Validate Store bundle
+        run: python packaging/store_check.py --release-dir out --repo-root .
       - uses: actions/upload-artifact@v7
         with:
           name: autodiag-msix

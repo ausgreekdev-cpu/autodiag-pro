@@ -83,3 +83,14 @@ def test_check_bad_tag_is_error():
 def test_check_missing_keys_is_error():
     result = check_for_update("0.1.0", fetch=lambda _u, _t: {})
     assert result.status == "error"
+
+
+def test_store_mode_short_circuits_update_check(monkeypatch):
+    monkeypatch.setenv("AUTODIAG_STORE_MODE", "1")
+
+    def boom(_url, _timeout):
+        raise AssertionError("no HTTP in store mode")
+
+    result = check_for_update("0.1.0", fetch=boom)
+    assert result.status == "store"
+    assert "Microsoft Store" in result.message

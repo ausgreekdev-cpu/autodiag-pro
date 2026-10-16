@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -174,6 +175,16 @@ class SettingsPanel(QWidget):
         check_row.addWidget(self._update_label, 1)
         about_layout.addLayout(check_row)
 
+        store_row = QHBoxLayout()
+        store_row.addWidget(QLabel("Store Product ID:"))
+        self._store_id_edit = QLineEdit()
+        self._store_id_edit.setPlaceholderText("set after the Store listing goes live")
+        if self._prefs is not None:
+            self._store_id_edit.setText(self._prefs.store_product_id())
+        self._store_id_edit.editingFinished.connect(self._on_store_id_changed)
+        store_row.addWidget(self._store_id_edit, 1)
+        about_layout.addLayout(store_row)
+
         privacy_note = QLabel(
             "No data leaves this machine unless you press Check for updates "
             "(one GitHub API request) or Look up VIN (NHTSA) on the Vehicle "
@@ -195,6 +206,12 @@ class SettingsPanel(QWidget):
             self._on_protocol(code)
         label = str(self._protocol_combo.itemText(index))
         self._on_message(f"Protocol: {label} — applies on the next connect.")
+
+    # -- store -----------------------------------------------------------------
+
+    def _on_store_id_changed(self) -> None:
+        if self._prefs is not None:
+            self._prefs.set_store_product_id(self._store_id_edit.text())
 
     # -- update check -----------------------------------------------------------
 
@@ -219,6 +236,8 @@ class SettingsPanel(QWidget):
             )
         elif check.status == "current":
             self._update_label.setText(f"You're up to date (v{__version__}).")
+        elif check.status == "store":
+            self._update_label.setText("Microsoft Store manages updates.")
         else:
             self._update_label.setText(f"Update check failed: {check.message}")
 

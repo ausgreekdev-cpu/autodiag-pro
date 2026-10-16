@@ -89,10 +89,13 @@ four-part version than the previous one (CI takes care of this per tag).
 
 - Listing price: **Free** — the base tier (generic OBD-II read/clear, live
   gauges, CSV/HTML export) is the acquisition funnel.
-- Pro / Workshop tiers unlock via signed licence keys today
-  (`packaging/make_license.py`); Store purchases arrive with milestone M36
-  (in-app add-on/subscription + Store API wiring) — wire that before public
-  launch if tiers should sell through the Store.
+- Pro / Workshop tiers unlock via signed licence keys
+  (`packaging/make_license.py`; source `key` for direct sales, `store` for
+  Store-linked purchases). The in-app **Upgrade in Store…** button deep-links
+  to the listing (`ms-windows-store://pdp/?ProductId=…`) once the Product ID
+  is entered in Settings — purchases still arrive as licence keys.
+- Microsoft in-app purchase wiring (IAP) may follow later; the licence-key
+  flow is the v1 monetization path and needs no Store billing.
 - The earlier "paid app + trial" plan is **superseded**; if the submission
   is created before M36, still publish it as Free with a "Pro upgrade
   coming" note rather than charging for the base app.
@@ -143,3 +146,26 @@ Every Store release after launch:
    `autodiag-msix` .msix.
 3. Update *What's new* from the release notes; submit. The Store handles
    delivery and auto-update to customers.
+
+## 10. Launch checklist (M36)
+
+App-side readiness is done — `python packaging/store_check.py` passes on a
+tagged release (CI runs it in the `package-msix` job). What remains is the
+Partner Center registration (a user action; individual account, free):
+
+1. Register at [partner.microsoft.com](https://partner.microsoft.com) with the
+   individual account; reserve the name **AutoDiag Pro**.
+2. Create the submission from §3; paste the listing draft, upload
+   screenshots/icon, set the category and system requirements (§4).
+3. Set the **Product ID** (visible in the submission) in the app:
+   *Settings → Store Product ID* — this activates the in-app
+   **Upgrade in Store…** deep link.
+4. Fill the privacy policy URL (§6) and support URL; answer the age-rating
+   questionnaire.
+5. Price: **Free**; tiers sell as licence keys (§5) — no IAP setup needed.
+6. Submit for certification; on approval, set the listing live.
+7. Tag `v0.23.0` (or the next version) — CI builds the .msix; upload it in
+   Partner Center (§9) and paste the release notes into *What's new*.
+
+After launch, GitHub releases stop being the distribution channel (§8) —
+the Store version is the only public one.

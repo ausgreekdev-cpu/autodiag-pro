@@ -253,3 +253,15 @@ def test_docs_eula_matches_bundled_copy():
 
 def test_eula_version_is_stable():
     assert EULA_VERSION == "1"
+
+
+def test_store_source_round_trip(embedded_key):
+    payload = _payload(source="store")
+    state = license_mod._load_state(_signed(embedded_key, payload))
+    assert state.source == "store"
+
+
+def test_unknown_source_rejected(embedded_key):
+    payload = _payload(source="bogus")
+    with pytest.raises(license_mod.LicenseError, match="unknown license source"):
+        license_mod._load_state(_signed(embedded_key, payload))

@@ -267,3 +267,28 @@ def test_uds_waiver_blocked_on_free_tier(tmp_path, monkeypatch):
     assert not panel._write_btn.isEnabled()
     assert _FakeUpgrade.constructed[-1][1] == "uds.write"
     panel.deleteLater()
+
+
+def test_upgrade_dialog_store_button(qapp, monkeypatch, tmp_path):
+    from autodiag.ui.prefs import Prefs
+
+    manager = _free_manager(tmp_path)
+    dialog = UpgradeDialog(manager, "pdf.export")
+    assert dialog._store_btn.isEnabled()
+
+    opened: list[str] = []
+    monkeypatch.setattr(
+        "PySide6.QtGui.QDesktopServices.openUrl",
+        staticmethod(lambda url: opened.append(url.toString()) or True),
+    )
+    monkeypatch.setattr(
+        "autodiag.ui.license.QMessageBox.information", lambda *_a, **_k: None
+    )
+
+    # No product ID yet → info dialog, no navigation.
+    dialog._store_btn.click()
+    assert opened == []
+
+    monkeypatch.setattr(Prefs, "store_product_id", lambda _self: "9NBLGGH4R32N")
+    dialog._store_btn.click()
+    assert opened == ["ms-windows-store://pdp/?ProductId=9NBLGGH4R32N"]

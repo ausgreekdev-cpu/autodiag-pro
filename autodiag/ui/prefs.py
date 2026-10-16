@@ -172,6 +172,15 @@ class Prefs:
     def set_eula_version(self, version: str) -> None:
         self._s.setValue("eula_version", version)
 
+    # -- store ---------------------------------------------------------------
+
+    def store_product_id(self) -> str:
+        """Microsoft Store Product ID (empty until the listing is live)."""
+        return str(self._s.value("store_product_id", "") or "")
+
+    def set_store_product_id(self, product_id: str) -> None:
+        self._s.setValue("store_product_id", product_id.strip())
+
     # -- io ---------------------------------------------------------------------
 
     def sync(self) -> None:

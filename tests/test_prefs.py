@@ -133,3 +133,10 @@ def test_watchlist_garbage_falls_back(tmp_path):
     # malformed entries drop individually; the good one survives
     raw.setValue("watchlist", json.dumps({"zz": [1, 2], "0C": ["x", 3], "05": [80, None]}))
     assert prefs.watchlist() == {0x05: (80.0, None)}
+
+
+def test_store_product_id_round_trip(tmp_path):
+    prefs = _prefs(tmp_path)
+    assert prefs.store_product_id() == ""
+    prefs.set_store_product_id("  9NBLGGH4R32N  ")
+    assert prefs.store_product_id() == "9NBLGGH4R32N"

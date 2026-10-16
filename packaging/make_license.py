@@ -32,13 +32,17 @@ _TIERS = tuple(t.name.lower() for t in Tier)
 
 
 def build_payload(
-    *, tier: str, licensee: str, issued: str, expires: str | None
+    *, tier: str, licensee: str, issued: str, expires: str | None,
+    source: str = "key",
 ) -> dict:
+    if source not in ("key", "store"):
+        raise SystemExit(f"unknown source: {source!r}")
     payload: dict = {
         "format": LICENSE_FORMAT,
         "tier": tier,
         "licensee": licensee,
         "issued": issued,
+        "source": source,
     }
     if expires:
         payload["expires"] = expires
@@ -53,6 +57,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="Ed25519 private key PEM (or $LICENSE_SIGNING_KEY)")
     parser.add_argument("--issued", default=date.today().isoformat())
     parser.add_argument("--expires", default=None, help="YYYY-MM-DD")
+    parser.add_argument(
+        "--source", choices=("key", "store"), default="key",
+        help="license origin: key (direct sale) or store (Store purchase)",
+    )
     parser.add_argument("--out", required=True, help="output .json path")
     args = parser.parse_args(argv)
 
@@ -68,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         licensee=args.licensee.strip(),
         issued=args.issued,
         expires=args.expires,
+        source=args.source,
     )
     signature = sign_license(key_path.read_bytes(), payload)
     document = {**payload, "sig": signature}
