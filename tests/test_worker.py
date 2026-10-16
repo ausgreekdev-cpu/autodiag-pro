@@ -106,3 +106,11 @@ def test_worker_request_pid_round_trip(app):
     worker.shutdown()
     assert not worker.isRunning()
     assert errors == []
+
+
+def test_worker_mode08_submits_job():
+    worker = ObdWorker(connector=scripted_connector()[0])
+    submitted: list[tuple] = []
+    worker.engine.submit = lambda kind, payload=None: submitted.append((kind, payload))
+    worker.run_mode08(0x06, "$08 06 EGR system test")
+    assert submitted == [("mode08", (0x06, "$08 06 EGR system test"))]

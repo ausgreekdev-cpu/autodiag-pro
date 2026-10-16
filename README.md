@@ -77,8 +77,13 @@ port (USB cable or paired Bluetooth SPP dongle).
   $3E tester present) against any physical CAN ID (7E0, 7E1, …); ECU presets
   and custom hex are allowed, CAN headers are restored after every exchange,
   and each request is recorded in session history and the JSON/CSV/HTML
-  reports. Write services ($2E/$31/$2F) exist but stay behind an explicit
-  waiver checkbox and a per-send confirmation dialog
+   reports. Write services ($2E/$31/$2F) exist but stay behind an explicit
+   waiver checkbox and a per-send confirmation dialog
+- **Active tests (Mode $08)** — one-click bi-directional controls for the
+   public SAE J1979-DA test set (EVAP leak test, EGR, O2 sensors) plus custom
+   test IDs; each run shows a confirmation of exactly what the ECU will
+   actuate, and the outcome (accepted / NRC) lands in the request log — same
+   waiver + Workshop gate as write services
 - **Update check** — press *Check for updates* in Settings (or run
   `autodiag updates`) to compare against the latest GitHub release; one
   request, only when you ask
@@ -116,6 +121,7 @@ reading and clearing codes, CSV/HTML exports, guided basics.
 | Session history | last 10 | full | full |
 | UDS module reads ($10/$19/$22), PDF reports | — | ✓ | ✓ |
 | UDS write services, work orders | — | — | ✓ |
+| Mode $08 active tests | — | — | ✓ |
 
 Unlock with a signed licence key via *Settings → Install licence key…*
 (Microsoft Store purchases arrive with the Store listing). The first launch
@@ -159,6 +165,7 @@ stays offline — key checks are local Ed25519 verification.
 | 31. VIN decode + NHTSA recall lookup (v0.23.0) | done |
 | 32. Batched multi-PID polling + STN profile (v0.23.0) | done |
 | 33. Local guided repair advice (v0.23.0) | done |
+| 34. Mode $08 bi-directional active tests (v0.23.0) | done |
 
 ## Install & run
 

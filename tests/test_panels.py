@@ -1435,3 +1435,90 @@ def test_trouble_panel_shows_freeze_context_with_record(qapp):
     tree = panel._trees["stored"]
     tree.setCurrentItem(tree.topLevelItem(0))
     assert "stationary" in panel._guidance_pane.toHtml()
+
+
+def _patch_question(monkeypatch, answer):
+    from PySide6.QtWidgets import QMessageBox
+
+    class _FakeBox:
+        StandardButton = QMessageBox.StandardButton
+
+        @staticmethod
+        def question(*_args, **_kwargs):
+            return answer
+
+    monkeypatch.setattr("autodiag.ui.panels.uds.QMessageBox", _FakeBox)
+
+
+def test_uds_panel_active_test_section(qapp):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    assert panel._test_combo.count() == 7  # 6 presets + custom
+    assert panel._test_combo.currentData() == 0x01
+
+
+def test_uds_panel_run_test_requires_waiver(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    sent: list[tuple] = []
+    monkeypatch.setattr(
+        worker, "run_mode08", lambda test_id, label: sent.append((test_id, label))
+    )
+    panel._test_btn.click()
+    assert sent == []
+    assert "waiver" in panel._status.text().lower()
+
+
+def test_uds_panel_run_test_with_waiver(qapp, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    panel._waiver_chk.setChecked(True)
+    sent: list[tuple] = []
+    monkeypatch.setattr(
+        worker, "run_mode08", lambda test_id, label: sent.append((test_id, label))
+    )
+    _patch_question(monkeypatch, QMessageBox.StandardButton.Yes)
+
+    panel._test_combo.setCurrentIndex(5)  # $08 06 — EGR system test
+    panel._test_btn.click()
+    assert sent == [(0x06, "$08 06 EGR system test")]
+
+
+def test_uds_panel_custom_test_id(qapp, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    panel._waiver_chk.setChecked(True)
+    sent: list[tuple] = []
+    monkeypatch.setattr(
+        worker, "run_mode08", lambda test_id, label: sent.append((test_id, label))
+    )
+    _patch_question(monkeypatch, QMessageBox.StandardButton.Yes)
+
+    panel._test_combo.setCurrentIndex(6)  # Custom test ID…
+    assert not panel._custom_test_edit.isHidden()
+    panel._custom_test_edit.setText("FF")
+    panel._test_btn.click()
+    assert sent == [(0xFF, "$08 FF custom test $FF")]
+
+    panel._custom_test_edit.setText("GG")
+    panel._test_btn.click()
+    assert len(sent) == 1  # invalid hex rejected
+    assert "hex" in panel._status.text().lower()
+
+
+def test_uds_panel_on_mode08_appends_row(qapp):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    worker.mode08.emit(("0806", "accepted"))
+    assert panel._table.rowCount() == 1
+    assert panel._table.item(0, 1).text() == "0806"
+    assert panel._table.item(0, 2).text() == "accepted"
+    assert "0806: accepted" in panel._status.text()

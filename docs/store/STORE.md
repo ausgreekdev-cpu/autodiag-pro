@@ -56,6 +56,8 @@ four-part version than the previous one (CI takes care of this per tag).
   - Generic + manufacturer DTC lookup with a 10,000+ code dictionary
   - UDS (ISO 14229) requests for advanced diagnostics — with safety
     waiver for write services
+  - Mode $08 bi-directional active tests (EVAP, EGR, O2 sensor) behind the
+    write waiver
   - Scan history, HTML/PDF/CSV reports and customer work orders
   - Local repair guidance — likely causes, first checks and freeze-frame context
     for stored codes (offline heuristics)

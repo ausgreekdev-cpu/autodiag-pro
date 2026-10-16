@@ -918,3 +918,41 @@ def test_stn_adapter_emits_status_on_connect():
     assert any(
         "STN adapter detected" in message for message, in sink.of("status")
     )
+
+
+# -- mode $08 active tests (M34) ----------------------------------------------------
+
+
+def test_mode08_accepted():
+    connector, _holder = scripted_connector({"0806": b"4806\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    engine.submit("mode08", (0x06, "$08 06 EGR system test"))
+    engine.step(0.0)
+    assert sink.of("mode08")[0][0] == ("0806", "accepted")
+    assert any("Mode $08" in message for message, in sink.of("status"))
+
+
+def test_mode08_nrc_rejected():
+    connector, _holder = scripted_connector({"0801": b"7F0822\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    engine.submit("mode08", (0x01, "$08 01 EVAP system leak test"))
+    engine.step(0.0)
+    assert sink.of("mode08")[0][0] == ("0801", "rejected (NRC 0x22)")
+
+
+def test_mode08_error_path():
+    connector, _holder = scripted_connector()  # no 08XX script → "?"
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    engine.submit("mode08", (0x06, "$08 06 EGR system test"))
+    engine.step(0.0)
+    assert not sink.of("mode08")
+    assert sink.of("error")

@@ -425,6 +425,25 @@ class ObdEngine:
                 except ElmError:
                     pass  # best-effort restore; a dead link surfaces elsewhere
 
+    def _job_mode08(self, payload: tuple[int, str]) -> None:
+        """One Mode $08 onboard-control request (bi-directional actuator test)."""
+        test_id, label = payload
+        request = f"08{test_id:02X}"
+        self._emit("status", f"Mode $08 {label} → {request}")
+        try:
+            text = self._req(request)
+        except ElmError as exc:
+            self._emit("error", str(exc))
+            return
+        flat = text.upper().replace(" ", "")
+        if flat.startswith(f"48{test_id:02X}"):
+            outcome = "accepted"
+        elif flat.startswith("7F08") and len(flat) >= 6:
+            outcome = f"rejected (NRC 0x{flat[4:6]})"
+        else:
+            outcome = text or "no response"
+        self._emit("mode08", (request, outcome))
+
     # -- polling -------------------------------------------------------------
 
     def _poll_status(self) -> str:

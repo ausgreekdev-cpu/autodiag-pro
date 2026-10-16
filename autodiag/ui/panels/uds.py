@@ -29,6 +29,20 @@ from autodiag.ui.license import try_unlock
 
 _MAX_ROWS = 100
 
+#: Public SAE J1979-DA Mode $08 test IDs (bi-directional controls). Anything
+#: beyond this set is OEM-specific — the panel offers a custom ID for those.
+MODE08_TESTS: tuple[tuple[int, str, str], ...] = (
+    (
+        0x01,
+        "EVAP system leak test",
+        "The EVAP system is pressurized and the purge/vent valves are cycled.",
+    ),    (0x02, "Oxygen sensor B1S1 test", "The O2 sensor heater and signal are exercised."),
+    (0x03, "Oxygen sensor B1S2 test", "The O2 sensor heater and signal are exercised."),
+    (0x04, "Oxygen sensor B2S1 test", "The O2 sensor heater and signal are exercised."),
+    (0x05, "Oxygen sensor B2S2 test", "The O2 sensor heater and signal are exercised."),
+    (0x06, "EGR system test", "The EGR valve is cycled."),
+)
+
 
 class UdsPanel(QWidget):
     """UDS requests with decoded results; write services need the waiver."""
@@ -51,6 +65,7 @@ class UdsPanel(QWidget):
         worker.connected.connect(lambda _info: self._set_connected(True))
         worker.disconnected.connect(lambda _reason: self._set_connected(False))
         worker.uds.connect(self.on_uds)
+        worker.mode08.connect(self.on_mode08)
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -63,7 +78,7 @@ class UdsPanel(QWidget):
 
         hint = QLabel(
             "Read services — session ($10), DTCs ($19), read DID ($22),\n"
-            "tester present ($3E). Writes need the waiver below."
+            "tester present ($3E). Writes and active tests need the waiver below."
         )
         hint.setObjectName("subtle")
         layout.addWidget(hint)
@@ -156,7 +171,8 @@ class UdsPanel(QWidget):
         layout.addWidget(write_heading)
 
         self._waiver_chk = QCheckBox(
-            "I understand writes can reprogram or disable ECUs — enable write services"
+            "I understand writes and active tests can reprogram or disable ECUs — "
+            "enable write services"
         )
         self._waiver_chk.toggled.connect(self._on_waiver_toggled)
         layout.addWidget(self._waiver_chk)
@@ -230,6 +246,32 @@ class UdsPanel(QWidget):
         io_row.addWidget(self._io_btn)
         layout.addLayout(io_row)
 
+        active_heading = QLabel("Active tests — mode $08 (bi-directional)")
+        active_heading.setObjectName("heading")
+        layout.addWidget(active_heading)
+
+        active_row = QHBoxLayout()
+        active_row.setSpacing(8)
+        active_row.addWidget(QLabel("Test:"))
+        self._test_combo = QComboBox()
+        for test_id, name, _note in MODE08_TESTS:
+            self._test_combo.addItem(f"$08 {test_id:02X} — {name}", test_id)
+        self._test_combo.addItem("Custom test ID…", None)
+        self._test_combo.currentIndexChanged.connect(self._on_test_changed)
+        active_row.addWidget(self._test_combo, 1)
+        self._custom_test_edit = QLineEdit()
+        self._custom_test_edit.setPlaceholderText("hex 01–FF")
+        self._custom_test_edit.setFixedWidth(80)
+        self._custom_test_edit.setValidator(
+            QRegularExpressionValidator(QRegularExpression("[0-9A-Fa-f]{1,2}"), self)
+        )
+        self._custom_test_edit.setVisible(False)
+        active_row.addWidget(self._custom_test_edit)
+        self._test_btn = QPushButton("Run test")
+        self._test_btn.clicked.connect(self._on_run_test)
+        active_row.addWidget(self._test_btn)
+        layout.addLayout(active_row)
+
         self._status = QLabel("Connect to send UDS requests.")
         self._status.setObjectName("subtle")
         layout.addWidget(self._status)
@@ -257,20 +299,28 @@ class UdsPanel(QWidget):
     def on_uds(self, payload: object) -> None:
         request, result = payload  # type: ignore[misc]
         raw = str(getattr(result, "raw", "") or "")
-        flat = framing.flatten_response(raw)
         if isinstance(result, UdsError):
             text = str(result)  # "requestOutOfRange (NRC 0x31 for service $22)"
         else:
             text = uds.describe_response(str(request), result)
+        self._append_row(str(request).upper(), text, raw)
+        self._status.setText(text)
+
+    def on_mode08(self, payload: object) -> None:
+        request, outcome = payload  # type: ignore[misc]
+        self._append_row(request, outcome, "")
+        self._status.setText(f"{request}: {outcome}")
+
+    def _append_row(self, request: str, text: str, raw: str) -> None:
+        flat = framing.flatten_response(raw)[:80]
         self._table.insertRow(0)
         self._table.setItem(0, 0, QTableWidgetItem(datetime.now().strftime("%H:%M:%S")))
-        self._table.setItem(0, 1, QTableWidgetItem(str(request).upper()))
+        self._table.setItem(0, 1, QTableWidgetItem(request))
         self._table.setItem(0, 2, QTableWidgetItem(text))
-        self._table.setItem(0, 3, QTableWidgetItem(flat[:80]))
+        self._table.setItem(0, 3, QTableWidgetItem(flat))
         while self._table.rowCount() > _MAX_ROWS:
             self._table.removeRow(self._table.rowCount() - 1)
         self._table.scrollToTop()
-        self._status.setText(text)
 
     # -- interactions ----------------------------------------------------------
 
@@ -367,6 +417,49 @@ class UdsPanel(QWidget):
         self._send(
             uds.io_control_by_identifier(int(did_text, 16), int(param_text, 16), data)
         )
+
+    def _on_test_changed(self, _index: int) -> None:
+        self._custom_test_edit.setVisible(self._test_combo.currentData() is None)
+
+    def _on_run_test(self) -> None:
+        if not self._waiver_chk.isChecked():
+            self._status.setText(
+                "Tick the waiver first — active tests command the ECU to "
+                "actuate components."
+            )
+            return
+        if not try_unlock(self, self._license, "uds.write"):
+            self._status.setText("Active tests are a Workshop feature — see Settings.")
+            return
+        test_id = self._test_combo.currentData()
+        if test_id is None:
+            text = self._custom_test_edit.text().strip()
+            try:
+                test_id = int(text, 16)
+            except ValueError:
+                self._status.setText("Custom test ID must be hex (01–FF).")
+                return
+            if not 0x01 <= test_id <= 0xFF:
+                self._status.setText("Custom test ID must be 01–FF.")
+                return
+            name = f"custom test ${test_id:02X}"
+            note = "OEM-specific test — verify the meaning before running."
+        else:
+            name, note = next(
+                (name, note) for tid, name, note in MODE08_TESTS if tid == test_id
+            )
+        answer = QMessageBox.question(
+            self,
+            "Run active test",
+            f"Send $08 {test_id:02X} ({name})?\n\n"
+            f"{note}\n\n"
+            "The ECU will actuate components. Keep the engine idling and do "
+            "not touch vehicle controls during the test.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self._worker.run_mode08(test_id, f"$08 {test_id:02X} {name}")
 
     def _hex_bytes(self, text: str, label: str) -> bytes | None:
         cleaned = "".join(text.split()).upper()
