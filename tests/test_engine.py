@@ -956,3 +956,72 @@ def test_mode08_error_path():
     engine.step(0.0)
     assert not sink.of("mode08")
     assert sink.of("error")
+
+
+# -- SGW unlock (M35) -----------------------------------------------------------
+
+
+_SGW_SCRIPT = {
+    "AT SH 7E2": b"OK\r\r>",
+    "AT CRA 7EA": b"OK\r\r>",
+    "AT SH": b"OK\r\r>",
+    "AT CRA": b"OK\r\r>",
+}
+
+
+def _sgw_engine(responses: dict[str, bytes]):
+    connector, _holder = scripted_connector({**_SGW_SCRIPT, **responses})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    return engine, sink
+
+
+def test_sgw_probe_found():
+    engine, sink = _sgw_engine(
+        {
+            "3E00": b"7E00\r\r>",
+            "22F194": b"62F1945347574D31\r\r>",
+        }
+    )
+    engine.submit("sgw_probe", "7E2")
+    engine.step(0.0)
+    events = sink.of("sgw_probe")
+    assert events and events[0][0][1] is not None
+    assert events[0][0][1].ecu_serial == "SGWM1"
+
+
+def test_sgw_probe_not_found():
+    engine, sink = _sgw_engine({})  # 3E00 → "?" → no answer
+    engine.submit("sgw_probe", "7E2")
+    engine.step(0.0)
+    events = sink.of("sgw_probe")
+    assert events and events[0][0][1] is None
+
+
+def test_sgw_seed_and_key_accepted():
+    engine, sink = _sgw_engine(
+        {
+            "2701": b"6701A1B2C3D4\r\r>",
+            "2702A1B2C3D4": b"6702\r\r>",
+        }
+    )
+    engine.submit("sgw_seed", "7E2")
+    engine.step(0.0)
+    seeds = sink.of("sgw_seed")
+    assert seeds and seeds[0][0][1] is not None
+    assert seeds[0][0][1].seed == bytes.fromhex("A1B2C3D4")
+
+    engine.submit("sgw_key", ("7E2", "A1B2C3D4"))
+    engine.step(0.0)
+    keys = sink.of("sgw_key")
+    assert keys and keys[0][0][1] is True
+
+
+def test_sgw_key_rejected():
+    engine, sink = _sgw_engine({"2702": b"7F2722\r\r>"})
+    engine.submit("sgw_key", ("7E2", "A1B2"))
+    engine.step(0.0)
+    keys = sink.of("sgw_key")
+    assert keys and keys[0][0][1] is False

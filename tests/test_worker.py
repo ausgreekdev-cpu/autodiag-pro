@@ -114,3 +114,17 @@ def test_worker_mode08_submits_job():
     worker.engine.submit = lambda kind, payload=None: submitted.append((kind, payload))
     worker.run_mode08(0x06, "$08 06 EGR system test")
     assert submitted == [("mode08", (0x06, "$08 06 EGR system test"))]
+
+
+def test_worker_sgw_commands_submit():
+    worker = ObdWorker(connector=scripted_connector()[0])
+    submitted: list[tuple] = []
+    worker.engine.submit = lambda kind, payload=None: submitted.append((kind, payload))
+    worker.run_sgw_probe("7E2")
+    worker.run_sgw_seed("7E2")
+    worker.run_sgw_key("7E2", "A1B2")
+    assert submitted == [
+        ("sgw_probe", "7E2"),
+        ("sgw_seed", "7E2"),
+        ("sgw_key", ("7E2", "A1B2")),
+    ]

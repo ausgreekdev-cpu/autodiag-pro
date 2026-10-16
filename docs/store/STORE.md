@@ -58,6 +58,8 @@ four-part version than the previous one (CI takes care of this per tag).
     waiver for write services
   - Mode $08 bi-directional active tests (EVAP, EGR, O2 sensor) behind the
     write waiver
+  - Security-gateway (SGW) unlock relay: $27 seed/key on the gateway module
+    (Workshop tier)
   - Scan history, HTML/PDF/CSV reports and customer work orders
   - Local repair guidance — likely causes, first checks and freeze-frame context
     for stored codes (offline heuristics)

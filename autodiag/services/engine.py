@@ -18,6 +18,7 @@ from autodiag.obd import dtc as dtc_dec
 from autodiag.obd import framing, freeze_frame, mode05, mode06, readiness, uds, vehicle
 from autodiag.obd import pids as pid_dec
 from autodiag.obd.elm327 import VALID_PROTOCOLS, ElmError, SessionInfo
+from autodiag.services import sgw
 from autodiag.transports.base import TransportError
 from autodiag.transports.serial_transport import Connection, connect_elm327
 
@@ -443,6 +444,46 @@ class ObdEngine:
         else:
             outcome = text or "no response"
         self._emit("mode08", (request, outcome))
+
+    # -- security gateway (SGW) ---------------------------------------------------
+
+    def _sgw_exchange(self, request: str, header: str) -> str | None:
+        """One exchange against the gateway module; headers restored after."""
+        try:
+            self._req(f"AT SH {header}")
+            self._req(f"AT CRA {uds.response_header(header)}")
+            try:
+                return self._req(request)
+            finally:
+                for cmd in ("AT SH", "AT CRA"):
+                    try:
+                        self._req(cmd)
+                    except ElmError:
+                        pass  # best-effort restore; a dead link surfaces elsewhere
+        except ElmError:
+            return None
+
+    def _job_sgw_probe(self, payload: str) -> None:
+        header = payload
+        self._emit("status", f"Probing SGW on {header}…")
+        info = sgw.probe_gateway(self._sgw_exchange, header)
+        self._emit("sgw_probe", (header, info))
+
+    def _job_sgw_seed(self, payload: str) -> None:
+        header = payload
+        self._emit("status", f"Requesting SGW seed on {header}…")
+        challenge = sgw.request_seed(self._sgw_exchange, header)
+        self._emit("sgw_seed", (header, challenge))
+
+    def _job_sgw_key(self, payload: tuple[str, str]) -> None:
+        header, key_hex = payload
+        try:
+            key = bytes.fromhex(key_hex)
+        except ValueError:
+            self._emit("sgw_key", (header, False, "key must be hex bytes"))
+            return
+        ok = sgw.send_key(self._sgw_exchange, header, key)
+        self._emit("sgw_key", (header, ok, "accepted" if ok else "rejected"))
 
     # -- polling -------------------------------------------------------------
 

@@ -77,8 +77,13 @@ port (USB cable or paired Bluetooth SPP dongle).
   $3E tester present) against any physical CAN ID (7E0, 7E1, …); ECU presets
   and custom hex are allowed, CAN headers are restored after every exchange,
   and each request is recorded in session history and the JSON/CSV/HTML
-   reports. Write services ($2E/$31/$2F) exist but stay behind an explicit
-   waiver checkbox and a per-send confirmation dialog
+  reports. Write services ($2E/$31/$2F) exist but stay behind an explicit
+  waiver checkbox and a per-send confirmation dialog
+- **Security gateway (SGW) unlock** — probe the gateway module (Ford-style
+  7E2), request its $27 security seed, paste the key computed by an
+  authorized tool (FORScan, AutoAuth-certified software) and send it back;
+  the app tracks the ~30-minute unlock window. Same waiver + Workshop gate
+  as write services
 - **Active tests (Mode $08)** — one-click bi-directional controls for the
    public SAE J1979-DA test set (EVAP leak test, EGR, O2 sensors) plus custom
    test IDs; each run shows a confirmation of exactly what the ECU will
@@ -120,7 +125,7 @@ reading and clearing codes, CSV/HTML exports, guided basics.
 | Live gauges, read/clear codes, CSV & HTML export | ✓ | ✓ | ✓ |
 | Session history | last 10 | full | full |
 | UDS module reads ($10/$19/$22), PDF reports | — | ✓ | ✓ |
-| UDS write services, work orders | — | — | ✓ |
+| UDS write services, work orders, SGW unlock | — | — | ✓ |
 | Mode $08 active tests | — | — | ✓ |
 
 Unlock with a signed licence key via *Settings → Install licence key…*
@@ -166,6 +171,7 @@ stays offline — key checks are local Ed25519 verification.
 | 32. Batched multi-PID polling + STN profile (v0.23.0) | done |
 | 33. Local guided repair advice (v0.23.0) | done |
 | 34. Mode $08 bi-directional active tests (v0.23.0) | done |
+| 35. AutoAuth SGW unlock assistant (v0.23.0) | done |
 
 ## Install & run
 

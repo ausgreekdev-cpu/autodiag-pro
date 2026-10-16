@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtGui import QRegularExpressionValidator
@@ -66,6 +66,12 @@ class UdsPanel(QWidget):
         worker.disconnected.connect(lambda _reason: self._set_connected(False))
         worker.uds.connect(self.on_uds)
         worker.mode08.connect(self.on_mode08)
+        worker.sgw_probe.connect(self.on_sgw_probe)
+        worker.sgw_seed.connect(self.on_sgw_seed)
+        worker.sgw_key.connect(self.on_sgw_key)
+        self._sgw_challenge = None
+        self._sgw_state = None
+        self._sgw_probed = False
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -272,6 +278,63 @@ class UdsPanel(QWidget):
         active_row.addWidget(self._test_btn)
         layout.addLayout(active_row)
 
+        sgw_heading = QLabel("Security gateway (SGW) — $27 unlock")
+        sgw_heading.setObjectName("heading")
+        layout.addWidget(sgw_heading)
+
+        sgw_row = QHBoxLayout()
+        sgw_row.setSpacing(8)
+        sgw_row.addWidget(QLabel("Gateway:"))
+        self._sgw_header_edit = QLineEdit("7E2")
+        self._sgw_header_edit.setFixedWidth(56)
+        self._sgw_header_edit.setValidator(
+            QRegularExpressionValidator(QRegularExpression("[0-9A-Fa-f]{1,3}"), self)
+        )
+        sgw_row.addWidget(self._sgw_header_edit)
+        self._sgw_probe_btn = QPushButton("Probe gateway")
+        self._sgw_probe_btn.clicked.connect(self._on_sgw_probe)
+        sgw_row.addWidget(self._sgw_probe_btn)
+        self._sgw_status = QLabel("No gateway probed yet.")
+        self._sgw_status.setObjectName("subtle")
+        sgw_row.addWidget(self._sgw_status, 1)
+        layout.addLayout(sgw_row)
+
+        seed_row = QHBoxLayout()
+        seed_row.setSpacing(8)
+        self._sgw_seed_btn = QPushButton("Request seed")
+        self._sgw_seed_btn.setEnabled(False)
+        self._sgw_seed_btn.clicked.connect(self._on_sgw_seed)
+        seed_row.addWidget(self._sgw_seed_btn)
+        self._sgw_seed_label = QLabel("Seed: —")
+        seed_row.addWidget(self._sgw_seed_label, 1)
+        layout.addLayout(seed_row)
+
+        key_row = QHBoxLayout()
+        key_row.setSpacing(8)
+        key_row.addWidget(QLabel("Key:"))
+        self._sgw_key_edit = QLineEdit()
+        self._sgw_key_edit.setPlaceholderText("computed by an authorized tool")
+        self._sgw_key_edit.setFixedWidth(140)
+        self._sgw_key_edit.setValidator(
+            QRegularExpressionValidator(QRegularExpression("[0-9A-Fa-f]*"), self)
+        )
+        key_row.addWidget(self._sgw_key_edit)
+        self._sgw_key_btn = QPushButton("Send key")
+        self._sgw_key_btn.setEnabled(False)
+        self._sgw_key_btn.clicked.connect(self._on_sgw_key)
+        key_row.addWidget(self._sgw_key_btn)
+        self._sgw_unlock_label = QLabel("Unlock: —")
+        self._sgw_unlock_label.setObjectName("subtle")
+        key_row.addWidget(self._sgw_unlock_label, 1)
+        layout.addLayout(key_row)
+
+        sgw_note = QLabel(
+            "Unlock lasts ~30 minutes. Compute the seed's key with an "
+            "authorized tool (FORScan, AutoAuth-certified software)."
+        )
+        sgw_note.setObjectName("subtle")
+        layout.addWidget(sgw_note)
+
         self._status = QLabel("Connect to send UDS requests.")
         self._status.setObjectName("subtle")
         layout.addWidget(self._status)
@@ -310,6 +373,46 @@ class UdsPanel(QWidget):
         request, outcome = payload  # type: ignore[misc]
         self._append_row(request, outcome, "")
         self._status.setText(f"{request}: {outcome}")
+
+    def on_sgw_probe(self, payload: object) -> None:
+        header, info = payload  # type: ignore[misc]
+        self._sgw_probed = info is not None
+        if info is None:
+            self._sgw_status.setText(f"No gateway answered on {header}.")
+        else:
+            identity = info.ecu_serial or info.software or "identity unknown"
+            self._sgw_status.setText(f"Gateway found on {header} — {identity}.")
+        self._refresh_sgw_buttons()
+
+    def on_sgw_seed(self, payload: object) -> None:
+        _header, challenge = payload  # type: ignore[misc]
+        self._sgw_challenge = challenge
+        if challenge is None:
+            self._sgw_seed_label.setText("Seed: request denied (NRC).")
+        else:
+            self._sgw_seed_label.setText(f"Seed: {challenge.seed.hex().upper()}")
+        self._refresh_sgw_buttons()
+
+    def on_sgw_key(self, payload: object) -> None:
+        _header, ok, detail = payload  # type: ignore[misc]
+        if ok:
+            from autodiag.services.sgw import UNLOCK_DURATION, UnlockState
+
+            moment = datetime.now(UTC)
+            self._sgw_state = UnlockState(
+                header=_header, unlocked_at=moment, expires_at=moment + UNLOCK_DURATION
+            )
+            self._sgw_unlock_label.setText(
+                f"Unlocked until {self._sgw_state.expires_at:%H:%M} — keep the ignition on."
+            )
+        else:
+            self._sgw_state = None
+            self._sgw_unlock_label.setText(f"Key rejected ({detail}).")
+
+    def _refresh_sgw_buttons(self) -> None:
+        waiver = self._waiver_chk.isChecked()
+        self._sgw_seed_btn.setEnabled(waiver and self._sgw_probed)
+        self._sgw_key_btn.setEnabled(waiver and self._sgw_challenge is not None)
 
     def _append_row(self, request: str, text: str, raw: str) -> None:
         flat = framing.flatten_response(raw)[:80]
@@ -421,15 +524,58 @@ class UdsPanel(QWidget):
     def _on_test_changed(self, _index: int) -> None:
         self._custom_test_edit.setVisible(self._test_combo.currentData() is None)
 
-    def _on_run_test(self) -> None:
+    def _confirm_write(self, what: str) -> bool:
+        """Shared gate for bi-directional features: waiver + Workshop tier."""
         if not self._waiver_chk.isChecked():
             self._status.setText(
-                "Tick the waiver first — active tests command the ECU to "
-                "actuate components."
+                f"Tick the waiver first — {what} command the ECU to actuate components."
             )
-            return
+            return False
         if not try_unlock(self, self._license, "uds.write"):
-            self._status.setText("Active tests are a Workshop feature — see Settings.")
+            self._status.setText(f"{what.capitalize()} is a Workshop feature — see Settings.")
+            return False
+        return True
+
+    def _sgw_header(self) -> str | None:
+        header = self._sgw_header_edit.text().strip().upper()
+        try:
+            int(header, 16)
+        except ValueError:
+            self._status.setText("Gateway header must be 1–3 hex digits (e.g. 7E2).")
+            return None
+        return header
+
+    def _on_sgw_probe(self) -> None:
+        header = self._sgw_header()
+        if header is None:
+            return
+        self._sgw_status.setText(f"Probing {header}…")
+        self._worker.run_sgw_probe(header)
+
+    def _on_sgw_seed(self) -> None:
+        if not self._confirm_write("SGW unlock"):
+            return
+        header = self._sgw_header()
+        if header is None:
+            return
+        self._worker.run_sgw_seed(header)
+
+    def _on_sgw_key(self) -> None:
+        if not self._confirm_write("SGW unlock"):
+            return
+        header = self._sgw_header()
+        if header is None:
+            return
+        key_text = "".join(self._sgw_key_edit.text().split())
+        try:
+            bytes.fromhex(key_text)
+        except ValueError:
+            self._status.setText("Key must be hex bytes (e.g. A1B2C3D4).")
+            return
+        self._worker.run_sgw_key(header, key_text)
+
+    def _on_run_test(self) -> None:
+        if not self._confirm_write("active tests"):
             return
         test_id = self._test_combo.currentData()
         if test_id is None:
@@ -505,6 +651,7 @@ class UdsPanel(QWidget):
             self._io_btn,
         ):
             widget.setEnabled(write_enabled)
+        self._refresh_sgw_buttons()
 
     def _set_connected(self, connected: bool) -> None:
         self._connected = connected

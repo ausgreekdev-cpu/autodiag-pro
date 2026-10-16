@@ -1522,3 +1522,104 @@ def test_uds_panel_on_mode08_appends_row(qapp):
     assert panel._table.item(0, 1).text() == "0806"
     assert panel._table.item(0, 2).text() == "accepted"
     assert "0806: accepted" in panel._status.text()
+
+
+def test_uds_panel_sgw_section(qapp):
+    from autodiag.services import sgw
+
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    assert panel._sgw_header_edit.text() == "7E2"
+    assert not panel._sgw_seed_btn.isEnabled()  # needs waiver + probe
+    assert sgw.DEFAULT_GATEWAY_HEADER == "7E2"
+
+
+def test_uds_panel_sgw_probe_flow(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    sent: list[str] = []
+    monkeypatch.setattr(worker, "run_sgw_probe", lambda header: sent.append(header))
+    panel._sgw_probe_btn.click()
+    assert sent == ["7E2"]
+    assert "Probing 7E2" in panel._sgw_status.text()
+
+
+def test_uds_panel_sgw_probe_result_enables_seed(qapp):
+    from autodiag.services import sgw
+
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    panel._waiver_chk.setChecked(True)
+    worker.sgw_probe.emit(("7E2", sgw.GatewayInfo("7E2", "SGWM1", None)))
+    assert "Gateway found" in panel._sgw_status.text()
+    assert panel._sgw_seed_btn.isEnabled()
+
+
+def test_uds_panel_sgw_seed_and_key_flow(qapp, monkeypatch):
+    from autodiag.services import sgw
+
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    panel._waiver_chk.setChecked(True)
+    sent: list = []
+    monkeypatch.setattr(worker, "run_sgw_seed", lambda header: sent.append(header))
+    monkeypatch.setattr(worker, "run_sgw_key", lambda header, key: sent.append((header, key)))
+
+    panel._sgw_probed = True  # simulate a successful probe
+    panel._refresh_sgw_buttons()
+    panel._sgw_seed_btn.click()
+    assert sent == ["7E2"]
+    assert panel._sgw_seed_label.text() == "Seed: —"
+
+    worker.sgw_seed.emit(("7E2", sgw.SeedChallenge("7E2", bytes.fromhex("A1B2"))))
+    assert panel._sgw_seed_label.text() == "Seed: A1B2"
+    assert panel._sgw_key_btn.isEnabled()
+
+    panel._sgw_key_edit.setText("BEEF")
+    panel._sgw_key_btn.click()
+    assert sent[-1] == ("7E2", "BEEF")
+
+    worker.sgw_key.emit(("7E2", True, "accepted"))
+    assert "Unlocked until" in panel._sgw_unlock_label.text()
+    assert panel._sgw_state is not None
+
+
+def test_uds_panel_sgw_key_rejected(qapp):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    worker.sgw_key.emit(("7E2", False, "rejected"))
+    assert "Key rejected" in panel._sgw_unlock_label.text()
+    assert panel._sgw_state is None
+
+
+def test_uds_panel_sgw_seed_requires_workshop(qapp, monkeypatch):
+    from autodiag.services.license import LicenseManager, LicenseState, Tier
+
+    class _FakeUpgrade:
+        def __init__(self, manager, feature, parent=None) -> None:
+            self.manager = manager
+            self.feature = feature
+
+        def exec(self):
+            from PySide6.QtWidgets import QDialog
+
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr("autodiag.ui.license.UpgradeDialog", _FakeUpgrade)
+    manager = LicenseManager(state=LicenseState(tier=Tier.FREE))
+    worker = ObdWorker()
+    panel = UdsPanel(worker, license_manager=manager)
+    worker.connected.emit(None)
+    panel._waiver_chk.setChecked(True)
+    panel._sgw_probed = True
+    panel._refresh_sgw_buttons()
+    sent: list[str] = []
+    monkeypatch.setattr(worker, "run_sgw_seed", lambda header: sent.append(header))
+    panel._sgw_seed_btn.click()
+    assert sent == []
+    assert "Workshop" in panel._status.text()

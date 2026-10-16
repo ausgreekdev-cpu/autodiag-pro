@@ -143,6 +143,16 @@ def io_control_by_identifier(did: int, control_param: int, data: bytes = b"") ->
     return f"2F{did:04X}{control_param:02X}" + data.hex().upper()
 
 
+def security_access_request_seed(sub_function: int = 0x01) -> str:
+    """``$27`` securityAccess — request a seed (ISO 14229-1; odd sub-function)."""
+    return f"27{sub_function:02X}"
+
+
+def security_access_send_key(key: bytes, sub_function: int = 0x02) -> str:
+    """``$27`` securityAccess — send the computed key (even sub-function)."""
+    return f"27{sub_function:02X}{key.hex().upper()}"
+
+
 def response_header(tx_header: str) -> str:
     """Expected response ID for a transmit header (TX + 8 on CAN 11-bit)."""
     return f"{int(tx_header, 16) + 8:03X}"

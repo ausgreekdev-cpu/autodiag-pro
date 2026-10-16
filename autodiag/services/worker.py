@@ -34,6 +34,9 @@ class ObdWorker(QThread):
     mode05 = Signal(object)  # list[mode05.TestResult]
     mode06 = Signal(object)  # list[TestResult]
     mode08 = Signal(object)  # (request_hex, outcome_text)
+    sgw_probe = Signal(object)  # (header, sgw.GatewayInfo | None)
+    sgw_seed = Signal(object)  # (header, sgw.SeedChallenge | None)
+    sgw_key = Signal(object)  # (header, ok: bool, detail: str)
     uds = Signal(object)  # (request_hex, UdsResponse | UdsError)
     voltage = Signal(float)
     reconnecting = Signal(int, int)  # (attempt about to run, max); (0, 0) = gave up
@@ -57,6 +60,9 @@ class ObdWorker(QThread):
         "mode05",
         "mode06",
         "mode08",
+        "sgw_probe",
+        "sgw_seed",
+        "sgw_key",
         "uds",
         "voltage",
         "reconnecting",
@@ -111,6 +117,18 @@ class ObdWorker(QThread):
     def run_mode08(self, test_id: int, label: str) -> None:
         """One Mode $08 onboard-control request (bi-directional actuator test)."""
         self._engine.submit("mode08", (test_id, label))
+
+    def run_sgw_probe(self, header: str = "7E2") -> None:
+        """Ping the security-gateway module and read its identity DIDs."""
+        self._engine.submit("sgw_probe", header)
+
+    def run_sgw_seed(self, header: str = "7E2") -> None:
+        """Request the gateway's $27 security seed."""
+        self._engine.submit("sgw_seed", header)
+
+    def run_sgw_key(self, header: str, key_hex: str) -> None:
+        """Send the computed $27 key back to the gateway."""
+        self._engine.submit("sgw_key", (header, key_hex))
 
     def read_voltage(self) -> None:
         self._engine.submit("read_voltage")
