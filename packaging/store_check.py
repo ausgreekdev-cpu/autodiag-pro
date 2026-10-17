@@ -11,6 +11,7 @@ day is a copy-paste job instead of a scavenger hunt.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import zipfile
 from pathlib import Path
@@ -21,7 +22,6 @@ from autodiag import __version__  # noqa: E402
 
 MANIFEST_PLACEHOLDERS = ("{{PACKAGE_NAME}}", "{{PUBLISHER}}", "{{PUBLISHER_DISPLAY}}")
 STORE_MARKERS = ("[set ", "[your ", "[when publishing")
-MSIX_ASSET_PREFIX = "assets/"
 
 
 def check_bundle(release_dir: Path, repo_root: Path) -> list[str]:
@@ -45,9 +45,13 @@ def check_bundle(release_dir: Path, repo_root: Path) -> list[str]:
                 problems.append(
                     f"{package.name}: manifest still has the {placeholder} placeholder"
                 )
-        assets = [name for name in names if name.startswith(MSIX_ASSET_PREFIX)]
-        if not assets:
-            problems.append(f"{package.name}: no app icons inside the package")
+        # Every icon the manifest references must be inside the package.
+        referenced = set(re.findall(r'"([^"]+\.png)"', manifest))
+        missing = sorted(name for name in referenced if name not in names)
+        if missing:
+            problems.append(
+                f"{package.name}: manifest references missing icons: {', '.join(missing)}"
+            )
 
     for required in (
         "docs/privacy-policy.md",

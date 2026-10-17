@@ -19,10 +19,26 @@ def _load_store_check():
     return module
 
 
-def _write_msix(path: Path, manifest: str = "<Package></Package>") -> None:
+_MANIFEST = (
+    '<Package><Properties>'
+    "<Logo>Square44x44Logo.png</Logo>"
+    "<uap:Square150x150Logo>Square150x150Logo.png</uap:Square150x150Logo>"
+    "</Properties></Package>"
+)
+_ICONS = (
+    "Square44x44Logo.png",
+    "Square150x150Logo.png",
+    "Square310x310Logo.png",
+    "StoreLogo50.png",
+    "SplashScreen.png",
+)
+
+
+def _write_msix(path: Path, manifest: str = _MANIFEST) -> None:
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("AppxManifest.xml", manifest)
-        archive.writestr("assets/icon-256.png", b"png")
+        for icon in _ICONS:
+            archive.writestr(icon, b"png")
 
 
 def _write_repo(repo: Path, *, eula_sync: bool = True, readme: str = "") -> None:
