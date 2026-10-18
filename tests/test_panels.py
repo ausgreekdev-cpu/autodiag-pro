@@ -1623,3 +1623,62 @@ def test_uds_panel_sgw_seed_requires_workshop(qapp, monkeypatch):
     panel._sgw_seed_btn.click()
     assert sent == []
     assert "Workshop" in panel._status.text()
+
+
+# -- UDS preset library (M37) --------------------------------------------------
+
+
+def test_uds_panel_preset_library(qapp):
+    from autodiag.services import uds_presets
+
+    panel = UdsPanel(ObdWorker())
+    # 13 presets + "Select a preset…" placeholder
+    assert panel._preset_combo.count() == 1 + len(uds_presets.load_presets())
+    assert panel._preset_combo.currentData() is None
+
+
+def test_uds_panel_preset_detail(qapp):
+    panel = UdsPanel(ObdWorker())
+    panel._preset_combo.setCurrentIndex(1)  # first real preset
+    assert panel._preset_detail.text() != ""
+
+
+def test_uds_panel_preset_requires_selection(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    sent: list[str] = []
+    monkeypatch.setattr(worker, "uds_request", lambda req, **_kw: sent.append(req))
+    panel._preset_btn.click()
+    assert sent == []
+    assert "Select a preset" in panel._status.text()
+
+def test_uds_panel_preset_run_sends_request(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    panel._waiver_chk.setChecked(True)
+    sent: list[str] = []
+    monkeypatch.setattr(worker, "uds_request", lambda req, **_kw: sent.append(req))
+    monkeypatch.setattr("autodiag.ui.panels.uds.try_unlock", lambda *a, **k: True)
+
+    # Monkeypatch QMessageBox to auto-accept
+    from PySide6.QtWidgets import QMessageBox
+
+    class _FakeBox:
+        StandardButton = QMessageBox.StandardButton
+
+        @staticmethod
+        def question(*_args, **_kwargs):
+            return QMessageBox.StandardButton.Yes
+
+        @staticmethod
+        def warning(*_args, **_kwargs):
+            return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr("autodiag.ui.panels.uds.QMessageBox", _FakeBox)
+
+    panel._preset_combo.setCurrentIndex(1)
+    panel._preset_btn.click()
+    assert len(sent) == 1
+    assert sent[0].startswith("2F") or sent[0].startswith("31")

@@ -1,0 +1,108 @@
+{
+  "presets": [
+    {
+      "name": "Throttle body relearn",
+      "service": "2F",
+      "request": "2F05E003",
+      "description": "Commands the throttle body to relearn its closed-position reference.",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "Fuel pump on",
+      "service": "2F",
+      "request": "2F000003",
+      "description": "Energises the fuel pump relay for priming / pressure testing.",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "Cooling fan on",
+      "service": "2F",
+      "request": "2F000103",
+      "description": "Forces the cooling fan on (high speed) for thermal testing.",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "A/C clutch on",
+      "service": "2F",
+      "request": "2F000203",
+      "description": "Engages the A/C compressor clutch for function testing.",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "Purge valve on",
+      "service": "2F",
+      "request": "2F000303",
+      "description": "Opens the EVAP purge valve for leak / flow testing.",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "Injector balance (cyl 1)",
+      "service": "2F",
+      "request": "2F000403",
+      "description": "Commands injector 1 to fire for balance testing.",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "EVAP leak test",
+      "service": "31",
+      "request": "31010200",
+      "description": "Starts the EVAP system leak test (routine 0x0200).",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "Catalyst monitor",
+      "service": "31",
+      "request": "31010201",
+      "description": "Runs the catalyst efficiency monitor (routine 0x0201).",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "O2 sensor test",
+      "service": "31",
+      "request": "31010202",
+      "description": "Runs the oxygen-sensor monitor (routine 0x0202).",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "EGR system test",
+      "service": "31",
+      "request": "31010203",
+      "description": "Runs the EGR system monitor (routine 0x0203).",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "DPF regeneration",
+      "service": "31",
+      "request": "31010204",
+      "description": "Commands a forced DPF regeneration (routine 0x0204).",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "Throttle relearn",
+      "service": "31",
+      "request": "31010205",
+      "description": "Runs the throttle-body relearn routine (routine 0x0205).",
+      "oem": "generic",
+      "tier": "workshop"
+    },
+    {
+      "name": "Injector coding",
+      "service": "31",
+      "request": "31010206",
+      "description": "Runs the injector coding routine (routine 0x0206).",
+      "oem": "generic",
+      "tier": "workshop"
+    }
+  ]
+}

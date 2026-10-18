@@ -224,6 +224,11 @@ def describe_report(report: dict[str, Any]) -> str:
                 f"({failure.get('value')} {failure.get('unit')})"
             )
 
+    active_tests = report.get("active_tests") or []
+    if active_tests:
+        accepted = sum(1 for t in active_tests if t.get("outcome") == "accepted")
+        lines.append(f"Active tests (Mode $08): {len(active_tests)} ({accepted} accepted)")
+
     live = report.get("live_data") or []
     if live:
         lines.append(f"Live data: {len(live)} parameter(s)")
@@ -259,4 +264,5 @@ def record_has_data(record: ScanRecord) -> bool:
         or record.pids
         or record.uds
         or record.nhtsa
+        or record.active_tests
     )

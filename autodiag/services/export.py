@@ -129,6 +129,12 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
         )
 
     generated = now or datetime.now(UTC)
+
+    active_tests = [
+        {"request": request, "outcome": outcome}
+        for request, outcome in record.active_tests
+    ]
+
     nhtsa = record.nhtsa or {}
     report: dict[str, Any] = {
         "app": {"name": "AutoDiag Pro", "version": __version__},
@@ -153,6 +159,7 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
         "mode06": mode06,
         "mode05": mode05,
         "uds": uds,
+        "active_tests": active_tests,
         "work_order": {},
         "live_data": pids,
         "advice": {"hints": hints_for(record)},
@@ -222,6 +229,10 @@ def report_to_csv(report: dict[str, Any]) -> str:
                     add(f"dtc.{source}", f"{code}.cause[{index}]", "", text)
                 for index, text in enumerate(guidance["checks"]):
                     add(f"dtc.{source}", f"{code}.check[{index}]", "", text)
+
+    for index, test in enumerate(report.get("active_tests") or []):
+        add("active_test", f"[{index}].request", "", test["request"])
+        add("active_test", f"[{index}].outcome", "", test["outcome"])
 
     advice = report.get("advice") or {}
     for index, hint in enumerate(advice.get("hints") or []):
@@ -532,6 +543,19 @@ def report_to_html(report: dict[str, Any]) -> str:
             section(
                 f"Trouble codes — {h(source)}",
                 table(["Code", "Detail"], rows),
+            )
+        )
+
+    active_tests = report.get("active_tests") or []
+    if active_tests:
+        rows = [
+            [h(test.get("request")), h(test.get("outcome"))]
+            for test in active_tests
+        ]
+        parts.append(
+            section(
+                f"Active tests (Mode $08) — {len(active_tests)}",
+                table(["Request", "Outcome"], rows),
             )
         )
 

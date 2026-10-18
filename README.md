@@ -78,7 +78,9 @@ port (USB cable or paired Bluetooth SPP dongle).
   and custom hex are allowed, CAN headers are restored after every exchange,
   and each request is recorded in session history and the JSON/CSV/HTML
   reports. Write services ($2E/$31/$2F) exist but stay behind an explicit
-  waiver checkbox and a per-send confirmation dialog
+  waiver checkbox and a per-send confirmation dialog. Active-test outcomes
+  (Mode $08) land in the session record and every export; a curated preset
+  library covers common $2F/$31 controls with one-click run
 - **Security gateway (SGW) unlock** — probe the gateway module (Ford-style
   7E2), request its $27 security seed, paste the key computed by an
   authorized tool (FORScan, AutoAuth-certified software) and send it back;
@@ -173,6 +175,7 @@ stays offline — key checks are local Ed25519 verification.
 | 33. Local guided repair advice (v0.23.0) | done |
 | 34. Mode $08 bi-directional active tests (v0.23.0) | done |
 | 35. AutoAuth SGW unlock assistant (v0.23.0) | done |
+| 36. Active-test reports + UDS preset library (v0.23.0) | done |
 
 ## Install & run
 

@@ -334,3 +334,61 @@ def test_describe_report_guidance_line():
     record.record_event("dtcs", ("stored", ["P0301", "P9999"]))
     description = describe_report(build_report(record))
     assert "Guidance: 1 of 2 code(s) with advice" in description
+
+
+# -- active tests in reports (M37) ------------------------------------------------
+
+
+def test_build_report_includes_active_tests():
+    record = make_record()
+    record.record_event("mode08", ("0806", "accepted"))
+    record.record_event("mode08", ("0801", "rejected (NRC 0x22)"))
+    report = build_report(record)
+    assert len(report["active_tests"]) == 2
+    assert report["active_tests"][0] == {"request": "0806", "outcome": "accepted"}
+    assert report["active_tests"][1]["outcome"] == "rejected (NRC 0x22)"
+
+
+def test_html_shows_active_tests_section():
+    record = make_record()
+    record.record_event("mode08", ("0806", "accepted"))
+    html = report_to_html(build_report(record))
+    assert "Active tests (Mode $08)" in html
+    assert "0806" in html
+    assert "accepted" in html
+
+
+def test_csv_active_test_rows():
+    record = make_record()
+    record.record_event("mode08", ("0806", "accepted"))
+    csv_text = report_to_csv(build_report(record))
+    assert "active_test,[0].request,,0806" in csv_text
+    assert "active_test,[0].outcome,,accepted" in csv_text
+
+
+def test_describe_report_active_tests_line():
+    record = make_record()
+    record.record_event("mode08", ("0806", "accepted"))
+    record.record_event("mode08", ("0801", "rejected (NRC 0x22)"))
+    description = describe_report(build_report(record))
+    assert "Active tests (Mode $08): 2 (1 accepted)" in description
+
+
+def test_record_event_mode08():
+    from autodiag.services.record import ScanRecord
+
+    record = ScanRecord()
+    record.record_event("mode08", (("0806", "accepted"),))
+    assert record.active_tests == [("0806", "accepted")]
+    record.record_event("mode08", (("0801", "rejected (NRC 0x22)"),))
+    assert len(record.active_tests) == 2
+
+
+def test_record_has_data_with_only_active_tests():
+    from autodiag.services.history import record_has_data
+    from autodiag.services.record import ScanRecord
+
+    record = ScanRecord()
+    assert not record_has_data(record)
+    record.record_event("mode08", (("0806", "accepted"),))
+    assert record_has_data(record)

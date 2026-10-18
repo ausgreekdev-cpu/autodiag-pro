@@ -25,6 +25,9 @@ class ScanRecord:
     freeze: dict[int, dict[int, float]] = field(default_factory=dict)  # frame → pid → value
     mode06: list[object] = field(default_factory=list)  # mode06.TestResult
     mode05: list[object] = field(default_factory=list)  # mode05.TestResult
+    active_tests: list[tuple[str, str]] = field(
+        default_factory=list
+    )  # (request_hex, outcome) — Mode $08 bi-directional
     uds: list[tuple[float, str, object]] = field(
         default_factory=list
     )  # (epoch, request, UdsResponse | UdsError)
@@ -63,6 +66,16 @@ class ScanRecord:
             self.mode06 = list(args[0])
         elif kind == "mode05":
             self.mode05 = list(args[0])
+        elif kind == "mode08":
+            if len(args) == 2 and not isinstance(args[0], tuple):
+                request, outcome = args
+            elif len(args) == 1 and isinstance(args[0], tuple) and len(args[0]) == 2:
+                request, outcome = args[0]
+            elif len(args) == 1:
+                request, outcome = args[0], ""
+            else:
+                request, outcome = args, ""
+            self.active_tests.append((str(request), str(outcome)))
         elif kind == "uds":
             request, result = args[0]
             self.uds.append((now.timestamp(), str(request), result))

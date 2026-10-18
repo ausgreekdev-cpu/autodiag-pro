@@ -57,7 +57,8 @@ four-part version than the previous one (CI takes care of this per tag).
   - UDS (ISO 14229) requests for advanced diagnostics — with safety
     waiver for write services
   - Mode $08 bi-directional active tests (EVAP, EGR, O2 sensor) behind the
-    write waiver
+    write waiver — outcomes saved in session history and exports
+  - Curated UDS preset library ($2F/$31) for common bi-directional controls
   - Security-gateway (SGW) unlock relay: $27 seed/key on the gateway module
     (Workshop tier)
   - Scan history, HTML/PDF/CSV reports and customer work orders

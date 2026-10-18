@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from autodiag.obd import framing, uds
 from autodiag.obd.uds import KNOWN_DIDS, UdsError, validate_request
 from autodiag.services.license import LicenseManager, get_license
+from autodiag.services.uds_presets import load_presets, preset_by_name
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.license import try_unlock
 
@@ -252,6 +253,30 @@ class UdsPanel(QWidget):
         io_row.addWidget(self._io_btn)
         layout.addLayout(io_row)
 
+        preset_heading = QLabel("Preset library — $2F / $31")
+        preset_heading.setObjectName("heading")
+        layout.addWidget(preset_heading)
+
+        preset_row = QHBoxLayout()
+        preset_row.setSpacing(8)
+        self._preset_combo = QComboBox()
+        self._preset_combo.addItem("Select a preset…", None)
+        for preset in load_presets():
+            self._preset_combo.addItem(
+                f"{preset.name} ({preset.service})", preset.name
+            )
+        preset_row.addWidget(self._preset_combo, 1)
+        self._preset_btn = QPushButton("Run preset")
+        self._preset_btn.clicked.connect(self._on_run_preset)
+        preset_row.addWidget(self._preset_btn)
+        layout.addLayout(preset_row)
+
+        self._preset_detail = QLabel("")
+        self._preset_detail.setObjectName("subtle")
+        self._preset_detail.setWordWrap(True)
+        layout.addWidget(self._preset_detail)
+        self._preset_combo.currentIndexChanged.connect(self._on_preset_changed)
+
         active_heading = QLabel("Active tests — mode $08 (bi-directional)")
         active_heading.setObjectName("heading")
         layout.addWidget(active_heading)
@@ -335,6 +360,7 @@ class UdsPanel(QWidget):
         sgw_note.setObjectName("subtle")
         layout.addWidget(sgw_note)
 
+        self._on_preset_changed(self._preset_combo.currentIndex())
         self._status = QLabel("Connect to send UDS requests.")
         self._status.setObjectName("subtle")
         layout.addWidget(self._status)
@@ -620,6 +646,38 @@ class UdsPanel(QWidget):
         except ValueError:
             return
         self._rx_label.setText(f"→ {rx}")
+
+    def _on_preset_changed(self, _index: int) -> None:
+        name = self._preset_combo.currentData()
+        preset = preset_by_name(name) if name else None
+        if preset is None:
+            self._preset_detail.setText("")
+            return
+        self._preset_detail.setText(f"{preset.description} — {preset.oem}")
+
+    def _on_run_preset(self) -> None:
+        name = self._preset_combo.currentData()
+        preset = preset_by_name(name) if name else None
+        if preset is None:
+            self._status.setText("Select a preset first.")
+            return
+        if not self._confirm_write("preset"):
+            return
+        if not try_unlock(self, self._license, "uds.write"):
+            self._status.setText("Presets are a Workshop feature — see Settings.")
+            return
+        answer = QMessageBox.question(
+            self,
+            "Run preset",
+            f"Send {preset.request} ({preset.name})?\n\n"
+            f"{preset.description}\n\n"
+            "The ECU will actuate components. Keep the engine idling and do "
+            "not touch vehicle controls during the test.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self._send(preset.request)
 
     def _on_ecu_preset(self, index: int) -> None:
         header = self._ecu_combo.itemData(index)
