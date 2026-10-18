@@ -60,7 +60,7 @@ four-part version than the previous one (CI takes care of this per tag).
     write waiver — outcomes saved in session history and exports
   - Curated UDS preset library ($2F/$31) for common bi-directional controls
   - Security-gateway (SGW) unlock relay: $27 seed/key on the gateway module
-    (Workshop tier)
+    (Workshop tier) — Ford seed-key algorithms built in
   - Scan history, HTML/PDF/CSV reports and customer work orders
   - Local repair guidance — likely causes, first checks and freeze-frame context
     for stored codes (offline heuristics)

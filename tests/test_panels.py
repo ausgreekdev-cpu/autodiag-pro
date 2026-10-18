@@ -1682,3 +1682,61 @@ def test_uds_panel_preset_run_sends_request(qapp, monkeypatch):
     panel._preset_btn.click()
     assert len(sent) == 1
     assert sent[0].startswith("2F") or sent[0].startswith("31")
+
+
+# -- SGW compute key (M38) -----------------------------------------------------
+
+
+def test_uds_panel_sgw_compute_key(qapp, monkeypatch):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    panel._waiver_chk.setChecked(True)
+
+    from autodiag.services.sgw import SeedChallenge
+
+    panel._sgw_probed = True
+    panel._refresh_sgw_buttons()
+    worker.sgw_seed.emit(("7E2", SeedChallenge("7E2", bytes.fromhex("123456"))))
+
+    panel._sgw_secret_edit.setText("0102030405")
+    panel._sgw_alg_combo.setCurrentIndex(0)  # algorithm 0
+    panel._sgw_compute_btn.click()
+
+    assert panel._sgw_key_edit.text() == "0EF7C5"
+    assert "ready to send" in panel._status.text()
+
+
+def test_uds_panel_sgw_compute_key_bad_secret(qapp):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    panel._waiver_chk.setChecked(True)
+
+    from autodiag.services.sgw import SeedChallenge
+
+    panel._sgw_probed = True
+    panel._refresh_sgw_buttons()
+    worker.sgw_seed.emit(("7E2", SeedChallenge("7E2", bytes.fromhex("123456"))))
+
+    panel._sgw_secret_edit.setText("not-hex")
+    panel._sgw_alg_combo.setCurrentIndex(0)
+    panel._sgw_compute_btn.click()
+
+    assert panel._sgw_key_edit.text() == ""
+    assert "hex" in panel._status.text().lower()
+
+
+def test_uds_panel_sgw_compute_key_no_seed(qapp):
+    worker = ObdWorker()
+    panel = UdsPanel(worker)
+    worker.connected.emit(None)
+    panel._waiver_chk.setChecked(True)
+    panel._sgw_probed = True
+    panel._refresh_sgw_buttons()
+
+    panel._sgw_secret_edit.setText("0102030405")
+    panel._sgw_compute_btn.click()
+
+    assert panel._sgw_key_edit.text() == ""
+    assert "seed" in panel._status.text().lower()

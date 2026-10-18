@@ -84,7 +84,9 @@ port (USB cable or paired Bluetooth SPP dongle).
 - **Security gateway (SGW) unlock** — probe the gateway module (Ford-style
   7E2), request its $27 security seed, paste the key computed by an
   authorized tool (FORScan, AutoAuth-certified software) and send it back;
-  the app tracks the ~30-minute unlock window. Same waiver + Workshop gate
+  the app tracks the ~30-minute unlock window. Ford seed-key algorithms
+  (legacy LFSR + HMAC-SHA1) are built in for one-click key computation
+  where the per-ECU secret is known. Same waiver + Workshop gate
   as write services
 - **Active tests (Mode $08)** — one-click bi-directional controls for the
    public SAE J1979-DA test set (EVAP leak test, EGR, O2 sensors) plus custom
@@ -176,6 +178,7 @@ stays offline — key checks are local Ed25519 verification.
 | 34. Mode $08 bi-directional active tests (v0.23.0) | done |
 | 35. AutoAuth SGW unlock assistant (v0.23.0) | done |
 | 36. Active-test reports + UDS preset library (v0.23.0) | done |
+| 37. Ford SGW seed-key computation (v0.23.0) | done |
 
 ## Install & run
 

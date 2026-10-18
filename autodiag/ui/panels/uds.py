@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from autodiag.obd import framing, uds
 from autodiag.obd.uds import KNOWN_DIDS, UdsError, validate_request
 from autodiag.services.license import LicenseManager, get_license
+from autodiag.services.sgw_keys import compute_key as compute_sgw_key
 from autodiag.services.uds_presets import load_presets, preset_by_name
 from autodiag.services.worker import ObdWorker
 from autodiag.ui.license import try_unlock
@@ -353,6 +354,29 @@ class UdsPanel(QWidget):
         key_row.addWidget(self._sgw_unlock_label, 1)
         layout.addLayout(key_row)
 
+        compute_row = QHBoxLayout()
+        compute_row.setSpacing(8)
+        compute_row.addWidget(QLabel("Algorithm:"))
+        self._sgw_alg_combo = QComboBox()
+        self._sgw_alg_combo.addItem("0 — LFSR (3-byte seed)", 0)
+        self._sgw_alg_combo.addItem("1 — HMAC-SHA1 (zaCK)", 1)
+        self._sgw_alg_combo.addItem("2 — HMAC-SHA1 (JaKe)", 2)
+        self._sgw_alg_combo.setCurrentIndex(0)
+        compute_row.addWidget(self._sgw_alg_combo)
+        compute_row.addWidget(QLabel("Secret:"))
+        self._sgw_secret_edit = QLineEdit()
+        self._sgw_secret_edit.setPlaceholderText("per-ECU secret (hex)")
+        self._sgw_secret_edit.setFixedWidth(160)
+        self._sgw_secret_edit.setValidator(
+            QRegularExpressionValidator(QRegularExpression("[0-9A-Fa-f]*"), self)
+        )
+        compute_row.addWidget(self._sgw_secret_edit)
+        self._sgw_compute_btn = QPushButton("Compute key")
+        self._sgw_compute_btn.setEnabled(False)
+        self._sgw_compute_btn.clicked.connect(self._on_compute_key)
+        compute_row.addWidget(self._sgw_compute_btn)
+        layout.addLayout(compute_row)
+
         sgw_note = QLabel(
             "Unlock lasts ~30 minutes. Compute the seed's key with an "
             "authorized tool (FORScan, AutoAuth-certified software)."
@@ -439,6 +463,29 @@ class UdsPanel(QWidget):
         waiver = self._waiver_chk.isChecked()
         self._sgw_seed_btn.setEnabled(waiver and self._sgw_probed)
         self._sgw_key_btn.setEnabled(waiver and self._sgw_challenge is not None)
+        self._sgw_compute_btn.setEnabled(waiver and self._sgw_probed)
+
+    def _on_compute_key(self) -> None:
+        if self._sgw_challenge is None:
+            self._status.setText("Request a seed first.")
+            return
+        algorithm = self._sgw_alg_combo.currentData()
+        secret_hex = "".join(self._sgw_secret_edit.text().split())
+        try:
+            secret = bytes.fromhex(secret_hex)
+        except ValueError:
+            self._status.setText("Secret must be hex bytes.")
+            return
+        seed = self._sgw_challenge.seed
+        try:
+            key = compute_sgw_key(algorithm, seed, secret)
+        except ValueError as exc:
+            self._status.setText(f"Key computation failed: {exc}")
+            return
+        self._sgw_key_edit.setText(key.hex().upper())
+        self._status.setText(
+            f"Key computed (algorithm {algorithm}) — ready to send."
+        )
 
     def _append_row(self, request: str, text: str, raw: str) -> None:
         flat = framing.flatten_response(raw)[:80]
