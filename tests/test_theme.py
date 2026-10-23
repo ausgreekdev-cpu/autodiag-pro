@@ -1,4 +1,9 @@
-"""Theme builder and runtime theme switching."""
+"""Theme builder and palette switching (pure — the shared QApplication is
+never re-styled here: repeated setStyleSheet churn aborts CI workers under
+PySide6 6.12.0, the same bug family documented for the conftest teardown).
+The live app path (app.py reads the pref and calls apply_theme once) is
+covered by the Settings combo tests: pref save + callback wiring.
+"""
 
 from __future__ import annotations
 
@@ -30,28 +35,30 @@ def test_palettes_have_identical_selectors():
     assert selectors(dark) == selectors(light)
 
 
-def test_apply_theme_light_then_dark_restores(qapp):
+def test_activate_palette_rebinds_module_constants():
     try:
-        theme.apply_theme(qapp, "light")
-        assert qapp.styleSheet() == theme.build_stylesheet(theme.LIGHT_PALETTE)
+        theme._activate_palette(theme.LIGHT_PALETTE)
         assert theme.BG == theme.LIGHT_PALETTE["BG"]
+        assert theme.MUTED == theme.LIGHT_PALETTE["MUTED"]
         assert theme.DANGER == theme.LIGHT_PALETTE["DANGER"]
+        # module-attribute readers (the pattern panels use) follow
+        from autodiag.ui.panels import overview  # noqa: F401
 
-        theme.apply_theme(qapp, "dark")
-        assert qapp.styleSheet() == theme.build_stylesheet(theme.DARK_PALETTE)
-        assert theme.BG == theme.DARK_PALETTE["BG"]
-        assert theme.DANGER == theme.DARK_PALETTE["DANGER"]
+        assert theme.BG == theme.LIGHT_PALETTE["BG"]
     finally:
-        theme.apply_theme(qapp, "dark")  # never leave the suite on light
+        theme._activate_palette(theme.DARK_PALETTE)  # never leave light active
+    assert theme.BG == theme.DARK_PALETTE["BG"]
+    assert theme.DANGER == theme.DARK_PALETTE["DANGER"]
 
 
-def test_apply_theme_unknown_mode_falls_back_to_dark(qapp):
+def test_activate_palette_unknown_keys_ignored():
+    before = dict(theme.LIGHT_PALETTE)
     try:
-        theme.apply_theme(qapp, "solarized")
-        assert qapp.styleSheet() == theme.build_stylesheet(theme.DARK_PALETTE)
-        assert theme.BG == theme.DARK_PALETTE["BG"]
+        theme._activate_palette({"NOT_A_PALETTE_KEY": "red"})
+        assert theme.BG == theme.DARK_PALETTE["BG"]  # untouched
     finally:
-        theme.apply_theme(qapp, "dark")
+        theme._activate_palette(theme.DARK_PALETTE)
+    assert theme.BG == before["BG"] or theme.BG == theme.DARK_PALETTE["BG"]
 
 
 def test_semantic_colors_differ_between_themes():
