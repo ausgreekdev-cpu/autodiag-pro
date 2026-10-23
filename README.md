@@ -185,6 +185,7 @@ stays offline — key checks are local Ed25519 verification.
 | 37. Ford SGW seed-key computation (v0.24.0) | done |
 | 38. Session auto-recovery (crash-safe saves) (v0.24.0) | done |
 | 39. Report diff (compare with exported files) (v0.24.0) | done |
+| 40. Dark/light theme toggle (v0.24.0) | done |
 
 ## Install & run
 
@@ -229,9 +230,9 @@ autodiag            # or: python -m autodiag
    safety recalls (offline mode simply reports the failure).
 7. **Settings** — export the whole session (VIN, codes, monitors, Mode $05/$06,
    latest readings) as JSON, CSV, HTML or PDF, pin the OBD protocol if auto-detection fails or
-   picks the wrong one, or press *Check for updates* to compare the running version
-   with
-   the latest GitHub release.
+   picks the wrong one, press *Check for updates* to compare the running version
+   with the latest GitHub release, or switch the theme (dark is the default;
+   light applies immediately).
 8. **History** — past sessions appear here automatically when you close the app
    (the newest 50 are kept). Select one to preview it, re-export it as
    JSON/CSV/HTML/PDF, attach a *Work order…* (customer, phone, mileage, job and

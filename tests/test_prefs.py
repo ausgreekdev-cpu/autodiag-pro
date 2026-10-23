@@ -140,3 +140,18 @@ def test_store_product_id_round_trip(tmp_path):
     assert prefs.store_product_id() == ""
     prefs.set_store_product_id("  9NBLGGH4R32N  ")
     assert prefs.store_product_id() == "9NBLGGH4R32N"
+
+
+def test_theme_default_and_round_trip(tmp_path):
+    prefs = _prefs(tmp_path)
+    assert prefs.theme() == "dark"
+    prefs.set_theme("light")
+    assert prefs.theme() == "light"
+    prefs.set_theme("dark")
+    assert prefs.theme() == "dark"
+
+
+def test_theme_invalid_value_falls_back(tmp_path):
+    prefs = _prefs(tmp_path)
+    prefs.set_theme("neon")
+    assert prefs.theme() == "dark"

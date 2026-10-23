@@ -24,7 +24,7 @@ from autodiag.obd.readiness import MonitorStatus
 from autodiag.services.history import SessionStore
 from autodiag.services.record import ScanRecord
 from autodiag.services.worker import ObdWorker
-from autodiag.ui.theme import DANGER, MUTED, OK
+from autodiag.ui import theme
 
 # Quick-action targets — MainWindow stack indices (append-only nav; the test
 # suite asserts these line up with the nav labels).
@@ -207,10 +207,10 @@ class OverviewPanel(QWidget):
         total = sum(counts.values())
         if total == 0:
             self._dtcs_note.setText("No codes reported yet")
-            self._dtcs_note.setStyleSheet(f"color: {MUTED};")
+            self._dtcs_note.setStyleSheet(f"color: {theme.MUTED};")
         else:
             self._dtcs_note.setText(f"{total} code{'s' if total != 1 else ''} found")
-            self._dtcs_note.setStyleSheet(f"color: {DANGER};")
+            self._dtcs_note.setStyleSheet(f"color: {theme.DANGER};")
 
     def _render_readiness(self) -> None:
         monitors = self._monitors
@@ -223,19 +223,19 @@ class OverviewPanel(QWidget):
         complete = [m for m in supported if m.complete]
         if monitors.ready:
             self._ready_value.setText("Ready for inspection")
-            self._ready_value.setStyleSheet(f"color: {OK};")
+            self._ready_value.setStyleSheet(f"color: {theme.OK};")
         else:
             self._ready_value.setText("Not ready")
-            self._ready_value.setStyleSheet(f"color: {DANGER};")
+            self._ready_value.setStyleSheet(f"color: {theme.DANGER};")
         self._monitors_value.setText(
             f"{len(complete)}/{len(supported)} monitors complete"
         )
         if monitors.mil_on:
             self._mil_value.setText(f"MIL on ({monitors.dtc_count} codes)")
-            self._mil_value.setStyleSheet(f"color: {DANGER};")
+            self._mil_value.setStyleSheet(f"color: {theme.DANGER};")
         else:
             self._mil_value.setText("MIL off")
-            self._mil_value.setStyleSheet(f"color: {OK};")
+            self._mil_value.setStyleSheet(f"color: {theme.OK};")
 
     def _render_last_session(self) -> None:
         summaries = self._store.list()

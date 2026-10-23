@@ -24,8 +24,8 @@ from PySide6.QtWidgets import (
 
 from autodiag.obd.pids import PID_REGISTRY, request_pid
 from autodiag.services.worker import ObdWorker
+from autodiag.ui import theme
 from autodiag.ui.prefs import GRAPH_WINDOW_CHOICES, Prefs
-from autodiag.ui.theme import BREACH_BG
 from autodiag.ui.widgets.gauge import Gauge
 from autodiag.ui.widgets.graph import LiveGraph
 
@@ -339,7 +339,7 @@ class DashboardPanel(QWidget):
         if item is None:
             return
         if pid in self._breached:
-            item.setBackground(QColor(BREACH_BG))
+            item.setBackground(QColor(theme.BREACH_BG))
         else:
             item.setBackground(QBrush())
 

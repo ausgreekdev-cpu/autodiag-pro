@@ -62,6 +62,7 @@ class SettingsPanel(QWidget):
         *,
         prefs: Prefs | None = None,
         on_protocol: Callable[[str], None] | None = None,
+        on_theme: Callable[[str], None] | None = None,
         license_manager: LicenseManager | None = None,
     ) -> None:
         super().__init__(parent)
@@ -69,6 +70,7 @@ class SettingsPanel(QWidget):
         self._on_message = on_message
         self._prefs = prefs
         self._on_protocol = on_protocol
+        self._on_theme = on_theme
         self._license = (
             license_manager if license_manager is not None else get_license()
         )
@@ -153,6 +155,22 @@ class SettingsPanel(QWidget):
         layout.addWidget(license_group)
         self._refresh_license_label()
 
+        appearance_group = QGroupBox("Appearance")
+        appearance_layout = QHBoxLayout(appearance_group)
+        appearance_layout.addWidget(QLabel("Theme:"))
+        self._theme_combo = QComboBox()
+        self._theme_combo.addItem("Dark", "dark")
+        self._theme_combo.addItem("Light", "light")
+        current = self._prefs.theme() if self._prefs is not None else "dark"
+        for index in range(self._theme_combo.count()):
+            if self._theme_combo.itemData(index) == current:
+                self._theme_combo.setCurrentIndex(index)
+                break
+        self._theme_combo.currentIndexChanged.connect(self._on_theme_changed)
+        appearance_layout.addWidget(self._theme_combo)
+        appearance_layout.addStretch(1)
+        layout.addWidget(appearance_group)
+
         about_group = QGroupBox("About")
         about_layout = QVBoxLayout(about_group)
         about_layout.addWidget(
@@ -212,6 +230,16 @@ class SettingsPanel(QWidget):
     def _on_store_id_changed(self) -> None:
         if self._prefs is not None:
             self._prefs.set_store_product_id(self._store_id_edit.text())
+
+    # -- appearance -------------------------------------------------------------
+
+    def _on_theme_changed(self, index: int) -> None:
+        mode = str(self._theme_combo.itemData(index) or "dark")
+        if self._prefs is not None:
+            self._prefs.set_theme(mode)
+        if self._on_theme is not None:
+            self._on_theme(mode)
+            self._on_message(f"Theme: {mode}.")
 
     # -- update check -----------------------------------------------------------
 

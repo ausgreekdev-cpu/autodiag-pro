@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QHBoxLayout,
@@ -179,6 +180,7 @@ class MainWindow(QMainWindow):
                 lambda msg: self.statusBar().showMessage(msg, 8000),
                 prefs=self._prefs,
                 on_protocol=self.worker.set_protocol,
+                on_theme=self._apply_theme,
                 license_manager=self._license,
             )
         )
@@ -318,6 +320,18 @@ class MainWindow(QMainWindow):
     def _on_thresholds_changed(self) -> None:
         self._prefs.set_watchlist(self._alert_log.watchlist.as_dict())
         self._dashboard.resync_breaches(self._alert_log.watchlist.breaching)
+
+    def _apply_theme(self, mode: str) -> None:
+        """Live-apply a theme change (Settings → Appearance)."""
+        app = QApplication.instance()
+        if app is None:
+            return
+        from autodiag.ui.theme import apply_theme
+
+        apply_theme(app, mode)
+        for button in getattr(self, "_nav_buttons", []):
+            button.style().unpolish(button)
+            button.style().polish(button)
 
     # -- public API --------------------------------------------------------------
 

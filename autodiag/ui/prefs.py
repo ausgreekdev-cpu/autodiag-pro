@@ -75,6 +75,14 @@ class Prefs:
     def set_auto_log(self, enabled: bool) -> None:
         self._s.setValue("auto_log", bool(enabled))
 
+    def theme(self) -> str:
+        """UI theme: ``"dark"`` (default) or ``"light"``."""
+        raw = str(self._s.value("theme", "dark") or "dark").lower()
+        return raw if raw in ("dark", "light") else "dark"
+
+    def set_theme(self, mode: str) -> None:
+        self._s.setValue("theme", mode if mode in ("dark", "light") else "dark")
+
     def protocol(self) -> str:
         """Pinned OBD protocol (``ATSP`` digit); ``"0"`` = auto-search."""
         raw = str(self._s.value("protocol", "0") or "0").upper()

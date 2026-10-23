@@ -1868,3 +1868,43 @@ def test_compare_dialog_same_file_twice_prompts(qapp, tmp_path, monkeypatch):
     dialog._file_btn_a.click()
     dialog._file_btn_b.click()  # same file on both sides
     assert "different" in dialog._body.toPlainText().lower()
+
+
+# -- theme toggle (M41) ----------------------------------------------------------
+
+
+def test_settings_theme_combo_defaults_dark(qapp, tmp_path):
+    from PySide6.QtCore import QSettings
+
+    from autodiag.ui.prefs import Prefs
+
+    prefs = Prefs(QSettings(str(tmp_path / "p.ini"), QSettings.Format.IniFormat))
+    panel = SettingsPanel(ScanRecord(), lambda _m: None, prefs=prefs)
+    assert panel._theme_combo.currentData() == "dark"
+
+
+def test_settings_theme_combo_saves_and_notifies(qapp, tmp_path):
+    from PySide6.QtCore import QSettings
+
+    from autodiag.ui.prefs import Prefs
+
+    prefs = Prefs(QSettings(str(tmp_path / "p.ini"), QSettings.Format.IniFormat))
+    applied: list[str] = []
+    messages: list[str] = []
+    panel = SettingsPanel(
+        ScanRecord(),
+        messages.append,
+        prefs=prefs,
+        on_theme=applied.append,
+    )
+    panel._theme_combo.setCurrentIndex(1)  # Light
+    assert prefs.theme() == "light"
+    assert applied == ["light"]
+    assert messages and "light" in messages[0].lower()
+
+
+def test_settings_theme_combo_without_prefs(qapp):
+    applied: list[str] = []
+    panel = SettingsPanel(ScanRecord(), lambda _m: None, on_theme=applied.append)
+    panel._theme_combo.setCurrentIndex(1)
+    assert applied == ["light"]  # callback still fires without prefs

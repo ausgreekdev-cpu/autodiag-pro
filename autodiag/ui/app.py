@@ -18,9 +18,10 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationName("AutoDiag Pro")
     app.setOrganizationName("AutoDiagPro")
     app.setWindowIcon(app_icon())
-    apply_theme(app)
 
     prefs = Prefs()
+    apply_theme(app, prefs.theme())
+
     window = MainWindow(prefs=prefs)
     window.show()
     if not ensure_eula_accepted(window, prefs):
