@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 from PySide6.QtCore import Qt
@@ -746,7 +747,7 @@ def test_compare_dialog_same_session_and_live_update(qapp, tmp_path):
     dialog = CompareDialog(store, baseline=names[1])
 
     dialog._combo_b.setCurrentIndex(1)  # same session as the baseline
-    assert dialog._body.toPlainText() == "Pick two different sessions."
+    assert dialog._body.toPlainText() == "Pick two different reports."
 
     dialog._combo_b.setCurrentIndex(0)  # switch back → live recompute
     assert "New trouble codes:" in dialog._body.toPlainText()
@@ -1740,3 +1741,130 @@ def test_uds_panel_sgw_compute_key_no_seed(qapp):
 
     assert panel._sgw_key_edit.text() == ""
     assert "seed" in panel._status.text().lower()
+
+
+# -- compare with file (M40) ------------------------------------------------------
+
+
+def _write_report_file(tmp_path, name: str = "report.json") -> str:
+    from autodiag.services.export import build_report as _br
+    from tests.test_export import make_record as _mk
+
+    path = tmp_path / name
+    path.write_text(json.dumps(_br(_mk())), encoding="utf-8")
+    return str(path)
+
+
+def test_compare_dialog_load_file_as_current(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    store = _compare_store(tmp_path)
+    names = [summary["name"] for summary in store.list()]
+    path = _write_report_file(tmp_path)
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (path, "AutoDiag reports (*.json)")),
+    )
+
+    dialog = CompareDialog(store, baseline=names[0])
+    dialog._file_btn_b.click()  # load as "current"
+
+    assert dialog._file_b is not None
+    assert dialog._file_b[0] == "report.json"
+    assert dialog._combo_b.isEnabled() is False
+    assert dialog._file_btn_b.text().startswith("File:")
+    text = dialog._body.toPlainText()
+    assert "report.json" in text  # filename shown in the diff header
+
+
+def test_compare_dialog_file_click_toggles_clear(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    store = _compare_store(tmp_path)
+    path = _write_report_file(tmp_path)
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (path, "")),
+    )
+
+    dialog = CompareDialog(store)
+    dialog._file_btn_a.click()
+    assert dialog._file_a is not None
+    assert not dialog._combo_a.isEnabled()
+
+    dialog._file_btn_a.click()  # second click clears
+    assert dialog._file_a is None
+    assert dialog._combo_a.isEnabled()
+    assert dialog._file_btn_a.text() == "Load file…"
+
+
+def test_compare_dialog_rejects_non_report_file(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    store = _compare_store(tmp_path)
+    junk = tmp_path / "junk.json"
+    junk.write_text('{"hello": 1}', encoding="utf-8")
+
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (str(junk), "")),
+    )
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda *a, **k: warnings.append(str(a[2]))),
+    )
+
+    dialog = CompareDialog(store)
+    dialog._file_btn_a.click()
+    assert dialog._file_a is None  # rejected
+    assert warnings and "Not a readable" in warnings[0]
+
+
+def test_compare_dialog_file_versus_file_empty_store(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    empty_store = SessionStore(tmp_path / "does-not-exist")
+    path_a = _write_report_file(tmp_path, "a.json")
+    path_b = _write_report_file(tmp_path, "b.json")
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (path_a, "")),
+    )
+
+    dialog = CompareDialog(empty_store)
+    dialog._file_btn_a.click()  # load baseline from file
+
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (path_b, "")),
+    )
+    dialog._file_btn_b.click()  # load current from file
+
+    text = dialog._body.toPlainText()
+    assert "a.json" in text and "b.json" in text
+    # identical reports → the formatter says "No differences"
+    assert "No differences" in text or "No changes" in text or "VIN" in text
+
+
+def test_compare_dialog_same_file_twice_prompts(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    store = _compare_store(tmp_path)
+    path = _write_report_file(tmp_path, "same.json")
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *a, **k: (path, "")),
+    )
+
+    dialog = CompareDialog(store)
+    dialog._file_btn_a.click()
+    dialog._file_btn_b.click()  # same file on both sides
+    assert "different" in dialog._body.toPlainText().lower()

@@ -158,6 +158,29 @@ class SessionStore:
                 pass  # a locked/missing file must not fail the save
 
 
+#: Top-level keys that mark a JSON object as an AutoDiag report.
+_REPORT_KEYS = frozenset(
+    {"app", "vehicle", "dtcs", "generated_at", "readiness", "live_data"}
+)
+
+
+def load_report_file(path: Path | str) -> dict[str, Any] | None:
+    """Read an exported report JSON from an arbitrary path.
+
+    Tolerant like the store's own reader: returns ``None`` when the file is
+    missing, not JSON, not an object, or doesn't look like a report.
+    """
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if not _REPORT_KEYS.intersection(data):
+        return None
+    return data
+
+
 def _summarize(name: str, report: dict[str, Any]) -> dict[str, Any]:
     vehicle = report.get("vehicle") or {}
     dtcs = report.get("dtcs") or {}

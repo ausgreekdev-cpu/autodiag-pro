@@ -364,3 +364,48 @@ def test_record_from_report_handles_empty(tmp_path):
     assert record.dtcs == {}
     assert record.monitors is None
     assert record.active_tests == []
+
+
+# -- load_report_file (M40) ------------------------------------------------------
+
+
+def test_load_report_file_round_trip(tmp_path):
+    from autodiag.services.history import load_report_file
+
+    report = _report()
+    path = tmp_path / "export.json"
+    path.write_text(json.dumps(report), encoding="utf-8")
+    loaded = load_report_file(path)
+    assert loaded is not None
+    assert loaded["vehicle"]["vin"] == report["vehicle"]["vin"]
+    assert loaded["dtcs"] == report["dtcs"]
+
+
+def test_load_report_file_missing(tmp_path):
+    from autodiag.services.history import load_report_file
+
+    assert load_report_file(tmp_path / "nope.json") is None
+
+
+def test_load_report_file_invalid_json(tmp_path):
+    from autodiag.services.history import load_report_file
+
+    path = tmp_path / "broken.json"
+    path.write_text("{not json", encoding="utf-8")
+    assert load_report_file(path) is None
+
+
+def test_load_report_file_not_a_dict(tmp_path):
+    from autodiag.services.history import load_report_file
+
+    path = tmp_path / "list.json"
+    path.write_text("[1, 2, 3]", encoding="utf-8")
+    assert load_report_file(path) is None
+
+
+def test_load_report_file_not_a_report(tmp_path):
+    from autodiag.services.history import load_report_file
+
+    path = tmp_path / "random.json"
+    path.write_text('{"settings": {"foo": 1}}', encoding="utf-8")
+    assert load_report_file(path) is None

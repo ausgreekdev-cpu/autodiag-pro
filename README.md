@@ -70,7 +70,9 @@ port (USB cable or paired Bluetooth SPP dongle).
   *View log…* button
 - **Session compare** — diff any two saved sessions: codes added/removed,
   readiness and MIL flips, Mode $05/$06 pass/fail changes, freeze-frame
-  value changes, live-value deltas, plus a warning when the two VINs differ
+  value changes, live-value deltas, plus a warning when the two VINs differ.
+  Either side can also be a report JSON exported to disk (*Load file…*),
+  so sessions from different machines can be compared
 - **PID explorer** — request any parameter on demand and see the raw response
   beside the decoded value; *Force* sends unsupported PIDs too, and one click
   pins the parameter to the dashboard graph
@@ -182,6 +184,7 @@ stays offline — key checks are local Ed25519 verification.
 | 36. Active-test reports + UDS preset library (v0.24.0) | done |
 | 37. Ford SGW seed-key computation (v0.24.0) | done |
 | 38. Session auto-recovery (crash-safe saves) (v0.24.0) | done |
+| 39. Report diff (compare with exported files) (v0.24.0) | done |
 
 ## Install & run
 
