@@ -188,10 +188,14 @@ def apply_theme(app: QApplication, mode: str = "dark") -> None:
 
     Panel modules that read ``theme.X`` at call time follow immediately;
     widgets with an inline color set earlier refresh on their next update.
+    The style is installed once — repeated setStyle() churns Qt's style
+    objects (PySide6 6.12.0 has been observed to abort on that path).
     """
     palette = LIGHT_PALETTE if mode == "light" else DARK_PALETTE
     _activate_palette(palette)
-    app.setStyle("Fusion")
+    if not app.property("_autodiag_style_set"):
+        app.setStyle("Fusion")
+        app.setProperty("_autodiag_style_set", True)
     app.setStyleSheet(build_stylesheet(palette))
 
     import pyqtgraph as pg
