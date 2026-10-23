@@ -179,8 +179,8 @@ stays offline — key checks are local Ed25519 verification.
 | 33. Local guided repair advice (v0.23.0) | done |
 | 34. Mode $08 bi-directional active tests (v0.23.0) | done |
 | 35. AutoAuth SGW unlock assistant (v0.23.0) | done |
-| 36. Active-test reports + UDS preset library (v0.23.0) | done |
-| 37. Ford SGW seed-key computation (v0.23.0) | done |
+| 36. Active-test reports + UDS preset library (v0.24.0) | done |
+| 37. Ford SGW seed-key computation (v0.24.0) | done |
 | 38. Session auto-recovery (crash-safe saves) (v0.24.0) | done |
 
 ## Install & run
