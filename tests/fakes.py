@@ -114,6 +114,9 @@ class FakeTransport(Transport, _ScriptedOutput):
             return b""
         return self._on_read(max_bytes, timeout)
 
+    def pending(self) -> int:
+        return len(self._buf)
+
     @property
     def is_open(self) -> bool:
         return self._open
@@ -144,6 +147,11 @@ class FakeSerial(_ScriptedOutput):
 
     def flush(self) -> None:
         pass
+
+    @property
+    def in_waiting(self) -> int:
+        """Mirrors pyserial: bytes buffered in the driver, ready to read."""
+        return len(self._buf)
 
     def close(self) -> None:
         self.is_open = False

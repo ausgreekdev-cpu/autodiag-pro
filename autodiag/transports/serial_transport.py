@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import serial
 from serial.tools import list_ports
 
-from autodiag.obd.elm327 import Elm327Session, ElmError, SessionInfo
+from autodiag.obd.elm327 import Elm327Session, ElmAborted, ElmError, SessionInfo
 from autodiag.transports.base import Transport, TransportError
 
 # Cheap ELM327 clones ship at different defaults; probe the common ones.
@@ -81,6 +81,16 @@ class SerialTransport(Transport):
             raise TransportError(f"Read from {self.device} failed: {exc}") from exc
         return data or b""
 
+    def pending(self) -> int | None:
+        """Bytes waiting in the driver buffer (``in_waiting``) — no read, no wait."""
+        ser = self._ser
+        if ser is None or not ser.is_open:
+            return 0
+        try:
+            return int(ser.in_waiting or 0)
+        except (AttributeError, OSError, TypeError, ValueError):
+            return None  # exotic backend: let the caller fall back to a timed read
+
     @property
     def is_open(self) -> bool:
         return self._ser is not None and self._ser.is_open
@@ -113,6 +123,7 @@ def connect_elm327(
     on_status: Callable[[str], None] | None = None,
     probe_vehicle: bool = True,
     protocol: str = "0",
+    should_abort: Callable[[], bool] | None = None,
 ) -> Connection:
     """Open ``device``, auto-detect baud rate, run the ELM327 init sequence.
 
@@ -124,6 +135,8 @@ def connect_elm327(
     ``probe_vehicle=False`` verifies the adapter alone (no ``0100`` bus
     probe) so callers can smoke-test hardware without a vehicle present.
     ``protocol`` pins the bus via ``ATSP`` (``"0"`` = auto-search).
+    ``should_abort`` interrupts the init sequence (including the ``0100``
+    protocol probe) so a cancelled connect does not hold the worker thread.
     """
     status = on_status if on_status is not None else (lambda _msg: None)
     last_error: Exception | None = None
@@ -132,10 +145,14 @@ def connect_elm327(
         status(f"Trying {device} at {baud} baud...")
         session = Elm327Session(
             SerialTransport(device, baud, serial_factory=serial_factory),
+            should_abort=should_abort,
             **(session_options or {}),
         )
         try:
             info = session.initialize(probe_vehicle=probe_vehicle, protocol=protocol)
+        except ElmAborted:
+            session.close()
+            raise
         except TransportError:
             session.close()
             raise

@@ -6,6 +6,7 @@ import csv
 import html
 import io
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -116,7 +117,7 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
         raw = framing.flatten_response(str(getattr(result, "raw", "") or ""))
         uds.append(
             {
-                "time": datetime.fromtimestamp(timestamp).isoformat(timespec="seconds"),
+                "time": datetime.fromtimestamp(timestamp, UTC).isoformat(timespec="seconds"),
                 "request": request,
                 "ok": isinstance(result, UdsResponse),
                 "result": (
@@ -129,6 +130,9 @@ def build_report(record: ScanRecord, *, now: datetime | None = None) -> dict[str
         )
 
     generated = now or datetime.now(UTC)
+    if generated.tzinfo is None:  # a naive caller still gets one unambiguous base
+        generated = generated.replace(tzinfo=UTC)
+    generated = generated.astimezone(UTC)
 
     active_tests = [
         {"request": request, "outcome": outcome}
@@ -178,12 +182,40 @@ def report_to_json(report: dict[str, Any]) -> str:
     return json.dumps(report, indent=2, ensure_ascii=False)
 
 
+_FORMULA_LEAD = "=+@\t\r\n"
+# A negative measurement (optionally with a short unit, e.g. "-5 °C") is data, not a
+# formula: it contains nothing that can call a function or reference a cell.
+_PLAIN_NEGATIVE = re.compile(r"-\d+(?:[.,]\d+)?(?: [A-Za-z%°]{0,4})?")
+
+
+def _csv_cell(text: str) -> str:
+    """Defuse a cell a spreadsheet would run as a formula (CSV injection).
+
+    Reports are meant to be forwarded to customers and insurers, and several cells
+    (work-order fields, DTC text, NHTSA recall remedy, UDS requests) are written by a
+    human or a remote service. A leading ``= + @`` or a line break makes Excel or
+    LibreOffice evaluate the cell (or an unsophisticated reader start a new record), so
+    those get a quote prefix — the standard CSV-side neutralizer, since a CSV file cannot
+    carry cell types. A leading ``-`` is only dangerous when it is not a plain number, so
+    ``-12.5`` and ``-5 °C`` stay numeric.
+    """
+    if not text:
+        return text
+    first = text.lstrip(" ")[:1]
+    if first and first in _FORMULA_LEAD:
+        return "'" + text
+    if first == "-" and not _PLAIN_NEGATIVE.fullmatch(text.strip()):
+        return "'" + text
+    return text
+
+
 def report_to_csv(report: dict[str, Any]) -> str:
     """Flat ``section,key,name,value`` CSV (one row per fact)."""
     rows: list[tuple[str, str, str, str]] = []
 
     def add(section: str, key: str, name: str, value: object) -> None:
-        rows.append((section, key, name, "" if value is None else str(value)))
+        cells = (section, key, name, "" if value is None else str(value))
+        rows.append(tuple(_csv_cell(cell) for cell in cells))
 
     add("meta", "app_version", "", report["app"]["version"])
     add("meta", "generated_at", "", report["generated_at"])
@@ -333,9 +365,43 @@ footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid #e5e7eb;
 }
 """
 
+# Added only for the PDF writer (see `report_to_html(..., for_print=True)`). Qt's rich
+# text engine ignores `display: flex`, so the print layout must be tables; the sizes are
+# points because a print device has real DPI rather than a CSS pixel viewport.
+_PRINT_STYLE = """
+body {
+  padding: 0;
+  font-family: "Segoe UI", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif;
+  font-size: 10pt;
+  line-height: 1.35;
+}
+main { max-width: none; }
+h1 { font-size: 17pt; }
+h1 .ver { font-size: 9pt; }
+h2 { font-size: 11pt; margin: 2pt 0 4pt; }
+.meta, th, td { font-size: 9pt; }
+section { margin: 12pt 0; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 3pt 5pt; }
+table.kpi { margin: 10pt 0 4pt; }
+table.kpi td { border: 1px solid #e5e7eb; width: 25%; vertical-align: top; }
+table.kpi .label { color: #6b7280; font-size: 7.5pt; text-transform: uppercase; }
+table.kpi .value { font-size: 14pt; font-weight: 600; }
+td.half { border: none; padding: 0 6pt 0 0; width: 50%; vertical-align: top; }
+td.half.right { padding: 0 0 0 6pt; }
+.badge { border: 1px solid #e5e7eb; }
+footer { display: none; }
+"""
 
-def report_to_html(report: dict[str, Any]) -> str:
-    """Single-file HTML report — inline styles, no scripts, print-friendly."""
+
+def report_to_html(report: dict[str, Any], *, for_print: bool = False) -> str:
+    """Single-file HTML report — inline styles, no scripts, print-friendly.
+
+    ``for_print`` targets a paginated print engine (the PDF writer's Qt rich-text
+    renderer) instead of a browser: it swaps the flexbox cards and two-column block for
+    real tables, since a CSS2 subset silently stacks flex children, and trims the page
+    chrome the PDF supplies itself.
+    """
 
     def h(value: object) -> str:
         if value is None or value == "":
@@ -385,7 +451,7 @@ def report_to_html(report: dict[str, Any]) -> str:
     parts.append(
         "<header>"
         f'<h1>AutoDiag Pro <span class="ver">v{h(app["version"])}</span></h1>'
-        f'<p class="meta">Generated {h(report["generated_at"])}</p>'
+        f'<p class="meta">Generated {h(_display_time(report["generated_at"]))}</p>'
         "</header>"
     )
 
@@ -402,15 +468,26 @@ def report_to_html(report: dict[str, Any]) -> str:
         ("Monitors", f"{ready_count}/{len(supported)} ready" if supported else "—"),
         ("Live PIDs", str(len(report.get("live_data") or []))),
     ]
-    parts.append(
-        '<div class="cards">'
-        + "".join(
-            f'<div class="card"><div class="label">{label}</div>'
-            f'<div class="value">{h(value)}</div></div>'
-            for label, value in cards
+    if for_print:
+        parts.append(
+            '<table class="kpi"><tbody><tr>'
+            + "".join(
+                f'<td><div class="label">{label}</div>'
+                f'<div class="value">{h(value)}</div></td>'
+                for label, value in cards
+            )
+            + "</tr></tbody></table>"
         )
-        + "</div>"
-    )
+    else:
+        parts.append(
+            '<div class="cards">'
+            + "".join(
+                f'<div class="card"><div class="label">{label}</div>'
+                f'<div class="value">{h(value)}</div></div>'
+                for label, value in cards
+            )
+            + "</div>"
+        )
 
     voltage = adapter.get("voltage")
     adapter_rows = [
@@ -438,12 +515,22 @@ def report_to_html(report: dict[str, Any]) -> str:
     ):
         if details.get(key):
             vehicle_rows.append([label, h(details[key])])
-    parts.append(
-        '<section class="cols">'
-        f'<div class="col"><h2>Adapter</h2>{table(["Field", "Value"], adapter_rows)}</div>'
-        f'<div class="col"><h2>Vehicle</h2>{table(["Field", "Value"], vehicle_rows)}</div>'
-        "</section>"
-    )
+    if for_print:
+        parts.append(
+            '<table class="split"><tbody><tr>'
+            f'<td class="half"><h2>Adapter</h2>'
+            f'{table(["Field", "Value"], adapter_rows)}</td>'
+            f'<td class="half right"><h2>Vehicle</h2>'
+            f'{table(["Field", "Value"], vehicle_rows)}</td>'
+            "</tr></tbody></table>"
+        )
+    else:
+        parts.append(
+            '<section class="cols">'
+            f'<div class="col"><h2>Adapter</h2>{table(["Field", "Value"], adapter_rows)}</div>'
+            f'<div class="col"><h2>Vehicle</h2>{table(["Field", "Value"], vehicle_rows)}</div>'
+            "</section>"
+        )
 
     work_order = report.get("work_order") or {}
     if any(work_order.values()):
@@ -627,7 +714,7 @@ def report_to_html(report: dict[str, Any]) -> str:
     if uds_requests:
         rows = [
             [
-                h(item.get("time")),
+                h(_display_time(item.get("time"))),
                 f"<code>{h(item.get('request'))}</code>",
                 badge("OK", "pass") if item.get("ok") else badge("NRC", "fail"),
                 h(item.get("result")),
@@ -673,7 +760,7 @@ def report_to_html(report: dict[str, Any]) -> str:
         '<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         f"<title>{h(title)}</title>\n"
-        f"<style>\n{_HTML_STYLE}</style>\n"
+        f"<style>\n{_HTML_STYLE}{_PRINT_STYLE if for_print else ''}</style>\n"
         "</head>\n"
         "<body>\n"
         "<main>\n"
@@ -702,6 +789,22 @@ def write_report(record: ScanRecord, path: str | Path) -> Path:
     report = build_report(record)
     target.write_text(report_text(report, target.suffix.lower()), encoding="utf-8")
     return target
+
+
+def _display_time(value: object) -> str:
+    """Render a report timestamp in the local zone, offset included.
+
+    Stored times are UTC; this is for humans only, and always shows the offset so a
+    printed page cannot be misread as local naive time.
+    """
+    text = str(value or "")
+    try:
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return text
+    if moment.tzinfo is None:
+        return text
+    return moment.astimezone().strftime("%Y-%m-%d %H:%M:%S %z")
 
 
 def _pass_label(passed: bool | None) -> str:

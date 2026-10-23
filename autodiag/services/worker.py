@@ -162,11 +162,17 @@ class ObdWorker(QThread):
     def run(self) -> None:
         self._engine.run_forever()
 
-    def shutdown(self, timeout_ms: int = 5000) -> None:
-        """Stop the engine loop and join the thread (call before destroy)."""
+    def shutdown(self, timeout_ms: int = 5000) -> bool:
+        """Stop the engine loop and join the thread (call before destroy).
+
+        Returns ``True`` when the thread is no longer running. Callers that
+        destroy the worker (window close, app exit) must honour ``False``:
+        deleting a running ``QThread`` aborts the process.
+        """
         self._engine.stop()
-        if self.isRunning():
-            self.wait(timeout_ms)
+        if not self.isRunning():
+            return True
+        return self.wait(timeout_ms)
 
     def _dispatch(self, kind: str, args: tuple[Any, ...]) -> None:
         if kind in self._EVENT_KINDS:

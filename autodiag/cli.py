@@ -153,7 +153,9 @@ def run_scan(
 
     deadline = time.monotonic() + max(seconds, 0.0)
     while (remaining := deadline - time.monotonic()) > 0:
-        engine.step(min(0.05, remaining))
+        # bound the wait by the scan deadline, not by a fixed poll period:
+        # the engine wakes early for the next scheduled PID request
+        engine.step(remaining)
 
     # Write before disconnecting: build_report snapshots record.session.
     path = Path(out) if out else Path(f"autodiag-scan-{datetime.now():%Y%m%d-%H%M%S}.json")

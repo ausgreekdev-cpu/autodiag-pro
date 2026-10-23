@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import threading
+import time
+
 import pytest
 
+from autodiag.obd.elm327 import Elm327Session
 from autodiag.obd.uds import UdsError, UdsResponse, decode_did
 from autodiag.services.engine import ObdEngine
 from autodiag.transports.base import TransportError
-from tests.fakes import scripted_connector
+from autodiag.transports.serial_transport import Connection
+from tests.fakes import FakeTransport, elm_script, scripted_connector
 
 
 def _pump(engine: ObdEngine, pred, *, limit: int = 2000) -> bool:
@@ -724,8 +729,10 @@ def test_set_protocol_job_pins_and_validates():
 def test_default_connector_passes_pinned_protocol(monkeypatch):
     captured: dict = {}
 
-    def fake_connect(device, *, protocol="0", on_status=None):
-        captured.update(device=device, protocol=protocol)
+    def fake_connect(device, *, protocol="0", on_status=None, should_abort=None):
+        captured.update(
+            device=device, protocol=protocol, cancellable=should_abort is not None
+        )
 
     monkeypatch.setattr("autodiag.services.engine.connect_elm327", fake_connect)
     engine = ObdEngine()
@@ -733,7 +740,8 @@ def test_default_connector_passes_pinned_protocol(monkeypatch):
     assert engine.step(0.0)
 
     engine._default_connector("/dev/OBD")
-    assert captured == {"device": "/dev/OBD", "protocol": "6"}
+    # the engine must be able to cancel a connect stuck in the 0100 probe
+    assert captured == {"device": "/dev/OBD", "protocol": "6", "cancellable": True}
 
 
 def test_uds_job_addresses_ecu_emits_response_and_restores_header():
@@ -1025,3 +1033,179 @@ def test_sgw_key_rejected():
     engine.step(0.0)
     keys = sink.of("sgw_key")
     assert keys and keys[0][0][1] is False
+
+
+# -- failure boundary + cancellation -------------------------------------------
+
+
+def test_unexpected_job_error_is_contained(monkeypatch):
+    """A decoder bug costs the job, not the worker thread (P0 #1)."""
+    connector, _holder = scripted_connector({"03": b"43 01 33 00 00 00 00\r\r>"})
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+
+    def boom(*_args, **_kwargs):
+        raise IndexError("list index out of range")
+
+    monkeypatch.setattr("autodiag.obd.dtc.parse_dtcs", boom)
+    engine.submit("read_dtcs", "stored")
+    assert engine.step(0.0) is True  # never escapes step()
+
+    errors = [message for message, in sink.of("error")]
+    assert any("read_dtcs" in m and "IndexError" in m for m in errors), errors
+    assert engine.connected
+    assert not sink.of("disconnected")
+    assert not sink.of("dtcs")
+
+    # …and the engine keeps working afterwards
+    engine.submit("read_voltage")
+    assert engine.step(0.0)
+    assert sink.of("voltage")[-1] == (12.6,)
+
+
+def test_unexpected_poll_decode_error_counts_toward_pid_budget(monkeypatch):
+    connector, _holder = scripted_connector()
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    engine.submit("set_poll", ({0x0C}, 0.0))
+    engine.step(0.0)
+
+    def boom(_text, _pid):
+        raise ValueError("short response")
+
+    monkeypatch.setattr("autodiag.obd.pids.parse_pid_values", boom)
+    assert _pump(
+        engine,
+        lambda: any("Dropping PID 0C" in m for m, in sink.of("status")),
+        limit=100,
+    )
+    assert engine.connected  # polling errors never drop the link
+    assert any("decode error" in m for m, in sink.of("error"))
+
+
+class _StallableTransport(FakeTransport):
+    """Scripted adapter output until ``stalled``, then a silent (dead) bus."""
+
+    stalled = False
+
+    def read(self, max_bytes: int = 1024, timeout: float = 0.1) -> bytes:
+        if self.stalled:
+            time.sleep(min(max(timeout, 0.0), 0.01))
+            return b""
+        return super().read(max_bytes, timeout)
+
+
+def _connector_over(transport: FakeTransport):
+    def connector(device: str) -> Connection:
+        session = Elm327Session(transport)
+        info = session.initialize()
+        return Connection(session=session, info=info, baudrate=38400)
+
+    return connector
+
+
+def test_stop_aborts_a_stalled_long_job_promptly():
+    """Mode $06 walk on a dead bus: stop must not wait out 5 s timeouts."""
+    transport = _StallableTransport(elm_script())
+    sink = Recorder()
+    engine = ObdEngine(connector=_connector_over(transport), on_event=sink)
+    engine.submit("connect", "/dev/OBD")
+    engine.step(0.0)
+    assert engine.connected
+
+    transport.stalled = True  # bus went silent mid-session
+    engine.submit("read_mode06")  # each 06xx request would block 5 s
+    thread = threading.Thread(target=engine.run_forever, daemon=True)
+    thread.start()
+    time.sleep(0.2)  # let the job block inside its first command
+
+    started = time.monotonic()
+    engine.stop()
+    thread.join(3.0)
+    elapsed = time.monotonic() - started
+
+    assert not thread.is_alive(), "worker loop stayed blocked inside a command"
+    assert elapsed < 1.0, f"stop took {elapsed:.2f}s of a 5s command timeout"
+    assert not sink.of("mode06"), "aborted job must not report partial results"
+
+
+# -- idle wait / poll scheduling ------------------------------------------------
+
+
+def test_idle_step_wakes_for_the_next_poll():
+    connector, _holder = scripted_connector()
+    sink = Recorder()
+    engine = ObdEngine(connector=connector, on_event=sink)
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    engine.submit("set_poll", ({0x0C}, 0.2))
+    engine.step(0.0)  # executes set_poll
+    engine.step(0.0)  # first poll → schedules the next one
+    before = len(sink.of("pid_value"))
+
+    started = time.monotonic()
+    assert engine.step(None) is True
+    elapsed = time.monotonic() - started
+
+    assert len(sink.of("pid_value")) > before  # woke up and polled
+    assert 0.1 <= elapsed < 1.0, f"waited {elapsed:.3f}s for a 0.2s poll"
+
+
+def test_idle_wait_targets_the_reconnect_deadline():
+    connector, holder = scripted_connector()
+    clock = {"t": 0.0}
+    engine = ObdEngine(
+        connector=connector, on_event=Recorder(), clock=lambda: clock["t"]
+    )
+    engine.submit("connect", "/dev/OBD")
+    engine.step(0.0)
+
+    holder["transport"].close()
+    clock["t"] = 1.0
+    engine.step(0.0)  # drop → reconnect scheduled at t=2.0
+    assert engine.reconnect_pending
+    assert engine._idle_wait(None) == pytest.approx(1.0)
+    assert engine._idle_wait(0.0) == 0.0  # explicit zero stays non-blocking
+
+
+def test_idle_wait_never_spins_on_a_due_poll():
+    connector, _holder = scripted_connector()
+    engine = ObdEngine(connector=connector, on_event=Recorder())
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    engine.submit("set_poll", ({0x0C}, 0.0))
+    engine.step(0.0)  # executes set_poll
+    engine.step(0.0)  # poll now → the next one is already due
+
+    assert engine._idle_wait(None) == pytest.approx(0.001)
+    assert engine._idle_wait(0.0) == 0.0
+
+
+def test_stop_wakes_an_idle_worker_promptly():
+    engine = ObdEngine(on_event=Recorder())  # never connects: parks on the queue
+    thread = threading.Thread(target=engine.run_forever, daemon=True)
+    thread.start()
+    time.sleep(0.1)
+
+    started = time.monotonic()
+    engine.stop()
+    thread.join(2.0)
+
+    assert not thread.is_alive()
+    assert time.monotonic() - started < 0.5
+
+
+def test_idle_wait_is_capped_for_pathological_intervals():
+    connector, _holder = scripted_connector()
+    engine = ObdEngine(connector=connector, on_event=Recorder())
+    engine.submit("connect", "X")
+    engine.step(0.0)
+    engine.submit("set_poll", ({0x0C}, float("inf")))
+    engine.step(0.0)  # executes set_poll
+    engine.step(0.0)  # polls once → next poll is infinitely far away
+
+    assert engine._idle_wait(None) == 1.0  # never hand inf to queue.get()

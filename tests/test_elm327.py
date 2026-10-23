@@ -1,8 +1,11 @@
 """ELM327 session tests against the scripted FakeTransport (no hardware)."""
 
+import threading
+import time
+
 import pytest
 
-from autodiag.obd.elm327 import Elm327Session, ElmError, ElmTimeout
+from autodiag.obd.elm327 import Elm327Session, ElmAborted, ElmError, ElmTimeout
 from tests.fakes import FakeTransport, elm_script
 
 FAST = {"reset_timeout": 0.5, "command_timeout": 0.5, "probe_timeout": 0.5}
@@ -173,3 +176,129 @@ def test_initialize_unknown_clone_still_sends_atat2():
     info = session.initialize()
     assert "ATAT2" in transport.writes
     assert info.adapter == "ELM327 v1.5"
+
+
+# -- cancellation ----------------------------------------------------------------
+
+
+class _DeadBus(FakeTransport):
+    """Accepts writes but never answers — an adapter with no vehicle talking."""
+
+    def read(self, max_bytes: int = 1024, timeout: float = 0.1) -> bytes:
+        time.sleep(min(max(timeout, 0.0), 0.01))
+        return b""
+
+
+def test_abort_is_not_an_elm_error():
+    # Retry/fallback loops catch ElmError; an abort must not be mistaken for a
+    # request that failed and may simply be re-sent.
+    assert not issubclass(ElmAborted, ElmError)
+
+
+def test_command_aborts_within_one_read_slice():
+    stop = threading.Event()
+    transport = _DeadBus({})
+    transport.open()
+    session = Elm327Session(transport, command_timeout=5.0)
+    session.set_abort_hook(stop.is_set)
+    threading.Timer(0.05, stop.set).start()
+
+    started = time.monotonic()
+    with pytest.raises(ElmAborted):
+        session.command("0100")
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 1.0, f"abort took {elapsed:.2f}s of a 5s timeout"
+
+
+def test_abort_before_write_skips_the_command():
+    session, transport = make_session()
+    session.set_abort_hook(lambda: True)
+    with pytest.raises(ElmAborted):
+        session.command("010C")
+    assert "010C" not in transport.writes
+
+
+def test_abort_hook_can_be_removed():
+    session, transport = make_session()
+    session.initialize()
+    session.set_abort_hook(lambda: True)
+    session.set_abort_hook(None)
+    assert "41 0C" in session.command("010C")
+    assert transport.writes[-1] == "010C"
+
+
+# -- pre-command drain ---------------------------------------------------------
+
+
+class _BlockingPort(FakeTransport):
+    """Models pyserial: a read with an empty buffer blocks for the timeout."""
+
+    def __init__(self, responses: dict[str, bytes] | None = None) -> None:
+        super().__init__(responses)
+        self.empty_reads = 0
+
+    def read(self, max_bytes: int = 1024, timeout: float = 0.1) -> bytes:
+        if not self._buf:
+            self.empty_reads += 1
+            time.sleep(min(max(timeout, 0.0), 0.2))
+            return b""
+        return super().read(max_bytes, timeout)
+
+
+class _UnknownBuffer(FakeTransport):
+    """A byte pipe that cannot report its buffer (the pre-pending() path)."""
+
+    def pending(self) -> int | None:
+        return None
+
+
+def test_command_does_not_block_draining_an_empty_port():
+    transport = _BlockingPort(elm_script())
+    session = Elm327Session(transport, **FAST)
+    session.initialize()
+    transport.empty_reads = 0
+
+    started = time.monotonic()
+    for _ in range(5):
+        assert session.command("010C") == "41 0C 1A F8"
+    elapsed = time.monotonic() - started
+
+    assert transport.empty_reads == 0  # no speculative read before the write
+    assert elapsed < 0.05, f"five commands took {elapsed:.2f}s"
+
+
+def test_stale_bytes_drain_without_waiting_out_a_timeout():
+    transport = _BlockingPort(elm_script())
+    session = Elm327Session(transport, **FAST)
+    session.initialize()
+    transport.inject(b"stale partial>")
+
+    started = time.monotonic()
+    assert session.command("010C") == "41 0C 1A F8"
+    assert time.monotonic() - started < 0.05
+    assert transport.empty_reads == 0
+
+
+def test_drain_falls_back_to_a_timed_read_when_pending_is_unknown():
+    transport = _UnknownBuffer(elm_script())
+    session = Elm327Session(transport, **FAST)
+    session.initialize()
+    transport.inject(b"stale partial>")
+    assert session.command("010C") == "41 0C 1A F8"
+
+
+def test_first_command_after_a_timeout_resyncs_the_line():
+    transport = _BlockingPort(elm_script(**{"010C": b""}))  # no answer
+    session = Elm327Session(transport, command_timeout=0.02)
+    session.initialize(probe_vehicle=False)
+
+    with pytest.raises(ElmTimeout):
+        session.command("010C")
+    assert session._unclean
+
+    transport.empty_reads = 0
+    assert "41 0D" in session.command("010D")
+    # late bytes may still be on the wire: one timed drain before the write
+    assert transport.empty_reads >= 1
+    assert not session._unclean

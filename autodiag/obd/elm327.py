@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from autodiag.obd import framing
@@ -53,6 +54,22 @@ class ElmTimeout(ElmError):
         super().__init__("timeout", message, raw)
 
 
+class ElmAborted(Exception):
+    """Raised when the owner asks an in-flight command to stop.
+
+    Deliberately *not* an :class:`ElmError`: the adapter did nothing wrong, so
+    ``except ElmError`` handlers (retry and fallback loops) must not swallow a
+    cancellation and send the next command anyway.
+    """
+
+    def __init__(self, message: str = "Request cancelled") -> None:
+        super().__init__(message)
+
+
+def _never() -> bool:
+    return False
+
+
 @dataclass(frozen=True)
 class SessionInfo:
     adapter: str
@@ -72,12 +89,26 @@ class Elm327Session:
         command_timeout: float = 5.0,
         reset_timeout: float = 4.0,
         probe_timeout: float = 20.0,
+        should_abort: Callable[[], bool] | None = None,
     ) -> None:
         self._transport = transport
         self._command_timeout = command_timeout
         self._reset_timeout = reset_timeout
         self._probe_timeout = probe_timeout
+        self._should_abort = should_abort if should_abort is not None else _never
         self.adapter_seen = False
+        # set when a command ends without its prompt: late bytes may still be
+        # on the wire, so the next command must not trust an empty buffer
+        self._unclean = False
+
+    def set_abort_hook(self, should_abort: Callable[[], bool] | None) -> None:
+        """Install a predicate that cancels in-flight commands when it returns true.
+
+        Checked between read slices, so a command blocked on a silent bus
+        (5 s default, 20 s during the protocol probe) returns within ~30 ms
+        instead of holding the worker thread to its timeout.
+        """
+        self._should_abort = should_abort if should_abort is not None else _never
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -174,9 +205,12 @@ class Elm327Session:
     # -- internals -----------------------------------------------------------
 
     def _transact(self, cmd: str, timeout: float) -> str:
+        self._check_abort()
         self._drain()
+        self._check_abort()
         self._transport.write(cmd.encode("ascii") + b"\r")
         raw = self._read_until_prompt(cmd, timeout)
+        self._unclean = False  # prompt consumed: the line is clean again
         kind, cleaned = framing.classify(raw, cmd)
         if kind is not None:
             raise ElmError(kind, ERROR_MESSAGES.get(kind, kind), raw=raw)
@@ -186,6 +220,7 @@ class Elm327Session:
         deadline = time.monotonic() + timeout
         buf = bytearray()
         while time.monotonic() < deadline:
+            self._check_abort()
             remaining = deadline - time.monotonic()
             chunk = self._transport.read(
                 max_bytes=_CHUNK,
@@ -195,17 +230,46 @@ class Elm327Session:
                 buf.extend(chunk)
                 if _PROMPT in buf:
                     return buf.decode("ascii", errors="replace")
+        self._unclean = True
         raise ElmTimeout(
             f"No response to {cmd!r} within {timeout:.1f}s",
             raw=buf.decode("ascii", errors="replace"),
         )
 
     def _drain(self) -> None:
-        """Discard stale bytes (leftover prompts, previous partial reads)."""
+        """Discard stale bytes (leftover prompts, previous partial reads).
+
+        When the transport can report its buffer (``pending()``), an empty
+        buffer costs one non-blocking check instead of a read that waits out
+        ``_DRAIN_INTERVAL`` on a quiet port. Transports that cannot answer,
+        and the command that follows a timeout, keep the timed drain.
+        """
+        if not self._unclean:  # after a timeout, wait out the quiet line once
+            deadline = time.monotonic() + _DRAIN_MAX
+            while True:
+                self._check_abort()
+                queued = self._transport.pending()
+                if queued is None:
+                    break  # buffer not visible: use the timed drain below
+                if queued <= 0:
+                    return
+                chunk = self._transport.read(max_bytes=4096, timeout=0.0)
+                if not chunk or time.monotonic() >= deadline:
+                    return
+        self._timed_drain()
+
+    def _timed_drain(self) -> None:
+        """Blocking drain until a quiet read, capped at ``_DRAIN_MAX``."""
         deadline = time.monotonic() + _DRAIN_MAX
         while time.monotonic() < deadline:
+            self._check_abort()
             if not self._transport.read(max_bytes=4096, timeout=_DRAIN_INTERVAL):
+                self._unclean = False
                 return
+
+    def _check_abort(self) -> None:
+        if self._should_abort():
+            raise ElmAborted()
 
 
 def _is_plausible(text: str) -> bool:

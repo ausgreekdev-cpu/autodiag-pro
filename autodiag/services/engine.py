@@ -11,13 +11,14 @@ from __future__ import annotations
 import queue
 import re
 import time
+import traceback
 from collections.abc import Callable
 from typing import Any
 
 from autodiag.obd import dtc as dtc_dec
 from autodiag.obd import framing, freeze_frame, mode05, mode06, readiness, uds, vehicle
 from autodiag.obd import pids as pid_dec
-from autodiag.obd.elm327 import VALID_PROTOCOLS, ElmError, SessionInfo
+from autodiag.obd.elm327 import VALID_PROTOCOLS, ElmAborted, ElmError, SessionInfo
 from autodiag.services import sgw
 from autodiag.transports.base import TransportError
 from autodiag.transports.serial_transport import Connection, connect_elm327
@@ -30,6 +31,8 @@ _VOLTAGE_EVERY = 40  # poll ticks between ATRV battery-voltage refreshes
 _MAX_PID_FAILURES = 3  # consecutive ElmErrors before a PID is dropped
 _BATCH_SIZE = 6  # PIDs per request when the bus is CAN (multi-PID command)
 _RECONNECT_BACKOFF = (1.0, 2.0, 4.0, 8.0, 15.0)  # seconds before each retry
+_MIN_IDLE_WAIT = 0.001  # s: keep an interval-0 poll from spinning the thread
+_MAX_IDLE_WAIT = 1.0  # s: cap scheduled sleeps (huge/inf intervals, clock jumps)
 
 _CAN_PROTOCOLS = {"6", "7", "8", "9"}  # ATDPN digits for ISO 15765-4
 # ATDPN digits for any CAN-based bus — service $05 is non-CAN only (§6.5).
@@ -95,11 +98,21 @@ class ObdEngine:
     # -- loop ----------------------------------------------------------------
 
     def run_forever(self) -> None:
-        while not self._stop:
-            self.step()
+        """Serve jobs and polls until :meth:`stop` (owns its worker thread).
 
-    def step(self, timeout: float = 0.05) -> bool:
+        Sleeps until a job arrives or the next poll/reconnect is due, so the
+        configured poll interval is honoured instead of being rounded up to
+        an arbitrary queue poll period.
+        """
+        while not self._stop:
+            self.step(None)
+
+    def step(self, timeout: float | None = 0.05) -> bool:
         """Run one job (waiting up to ``timeout``) or one due poll.
+
+        ``timeout=None`` waits until a job arrives or scheduled work is due
+        (next poll, reconnect attempt) — the worker thread's mode. A finite
+        timeout only bounds the wait; the call still wakes early for due work.
 
         Returns ``False`` once the engine has been stopped.
         """
@@ -107,7 +120,7 @@ class ObdEngine:
             return False
         job: tuple[str, Any] | None
         try:
-            job = self._jobs.get(timeout=timeout)
+            job = self._jobs.get(timeout=self._idle_wait(timeout))
         except queue.Empty:
             job = None
         if job is not None:
@@ -121,12 +134,55 @@ class ObdEngine:
         try:
             self._maybe_reconnect()
             self._maybe_poll()
+        except ElmAborted:
+            return not self._stop
         except TransportError as exc:
             # a vanished link must never escape the loop (it would kill the
             # worker thread): drop once, then schedule auto-reconnect
             self._drop_connection(str(exc), error=True)
             self._schedule_reconnect()
+        except Exception as exc:
+            # Last-resort boundary: nothing a poll or reconnect step raises may
+            # end the worker thread, or the UI keeps claiming "Connected"
+            # while the dashboard silently freezes.
+            self._report_unexpected("Polling", exc)
         return True
+
+    def _idle_wait(self, timeout: float | None) -> float | None:
+        """How long the loop may sleep before it has work to do.
+
+        Bounded by ``timeout`` (``None`` = until a job arrives) and by the
+        next scheduled poll or reconnect attempt. A due deadline floors the
+        wait at ``_MIN_IDLE_WAIT`` so an interval-0 poll cannot spin the CPU
+        (except for an explicit zero timeout) and scheduled sleeps are capped
+        at ``_MAX_IDLE_WAIT``. ``None`` means there is nothing scheduled, so
+        the loop can park until a job arrives.
+        """
+        wait = timeout
+        now = self._clock()
+        for due in (self._poll_due_at(), self._reconnect_due_at()):
+            if due is None:
+                continue
+            remaining = max(due - now, 0.0)
+            wait = remaining if wait is None else min(wait, remaining)
+        if wait is None:
+            return None  # nothing scheduled: sleep until a job arrives
+        wait = min(wait, _MAX_IDLE_WAIT)
+        if wait <= 0.0 and timeout != 0.0:
+            return _MIN_IDLE_WAIT
+        return wait
+
+    def _poll_due_at(self) -> float | None:
+        """Clock time of the next PID poll, or ``None`` when not polling."""
+        if self._session is None or not self._polling or not self._poll_pids:
+            return None
+        return self._next_poll_at
+
+    def _reconnect_due_at(self) -> float | None:
+        """Clock time of the next reconnect attempt, or ``None``."""
+        if self._reconnect_device is None or self._session is not None:
+            return None
+        return self._reconnect_at
 
     # -- job execution -------------------------------------------------------
 
@@ -136,11 +192,17 @@ class ObdEngine:
             return
         try:
             handler(payload)
+        except ElmAborted:
+            return  # stop() interrupted the job; shutdown drops the link
         except TransportError as exc:
             self._drop_connection(str(exc), error=True)
             self._schedule_reconnect()
         except ElmError as exc:
             self._emit("error", str(exc))
+        except Exception as exc:
+            # A decoder tripping over one unusual OEM payload must cost that
+            # job, not the whole polling thread. Keep the link and say so.
+            self._report_unexpected(f"Job {kind!r}", exc)
 
     def _job_connect(self, device: str) -> None:
         self._cancel_reconnect()
@@ -158,6 +220,9 @@ class ObdEngine:
         conn = connector(device)
         self._device = device
         self._session = conn.session
+        hook = getattr(self._session, "set_abort_hook", None)
+        if hook is not None:  # alternate sessions may not support cancellation
+            hook(self._is_stopping)
         self._info = conn.info
         pn = (conn.info.protocol_number or "").upper().lstrip("A")
         self._can = pn in _CAN_PROTOCOLS if pn else None
@@ -501,6 +566,26 @@ class ObdEngine:
         self._cursor += len(batch)
         return batch
 
+    def _note_pid_failure(self, pid: int, reason: str | None = None) -> None:
+        """Count one missed sample for ``pid``; drop it after the budget."""
+        failures = self._failures.get(pid, 0) + 1
+        self._failures[pid] = failures
+        if failures >= _MAX_PID_FAILURES:
+            self._drop_pid(pid)
+        elif reason is not None:
+            self._emit("error", reason)
+
+    def _emit_values(self, text: str, pid: int) -> None:
+        """Decode one response; a decoder bug counts as a missed sample."""
+        try:
+            values = pid_dec.parse_pid_values(text, pid)
+        except Exception as exc:  # payload shape the decoder did not expect
+            self._note_pid_failure(pid, f"PID {pid:02X} decode error: {exc}")
+            return
+        self._failures[pid] = 0  # a good sample clears the strike count
+        for channel, value in values.items():
+            self._emit("pid_value", channel, value, self._clock())
+
     def _drop_pid(self, pid: int) -> None:
         self._poll_pids = [p for p in self._poll_pids if p != pid]
         self._emit("status", f"Dropping PID {pid:02X} — no response")
@@ -517,7 +602,14 @@ class ObdEngine:
         self._next_poll_at = now + self._poll_interval
         try:
             text = self._req("".join(f"01{pid:02X}" for pid in batch))
-        except ElmError as exc:
+        except (ElmAborted, TransportError):
+            # cancelled, or the link itself vanished: the caller must handle
+            # these (abort the job / drop + reconnect), never count them
+            # against a single PID's failure budget.
+            raise
+        except Exception as exc:
+            # ElmError (bus said no) or an unexpected transport/session bug:
+            # both are one missed sample, never a dead engine.
             if len(batch) > 1:
                 # Either a transient bus error or this vehicle dislikes
                 # combined requests: isolate PIDs by reverting to singles.
@@ -528,19 +620,11 @@ class ObdEngine:
                     "falling back to single-PID requests",
                 )
                 return
-            pid = batch[0]
-            self._failures[pid] = self._failures.get(pid, 0) + 1
-            if self._failures[pid] >= _MAX_PID_FAILURES:
-                self._drop_pid(pid)
-            else:
-                self._emit("error", str(exc))
+            self._note_pid_failure(batch[0], str(exc))
             return
         self._ticks += 1
         if len(batch) == 1:
-            pid = batch[0]
-            self._failures[pid] = 0
-            for channel, value in pid_dec.parse_pid_values(text, pid).items():
-                self._emit("pid_value", channel, value, self._clock())
+            self._emit_values(text, batch[0])
         else:
             lengths = {
                 pid: pid_dec.PID_REGISTRY[pid].data_bytes
@@ -550,15 +634,9 @@ class ObdEngine:
             chunks = framing.split_pid_chunks(text, batch, lengths)
             for pid in batch:
                 if pid in chunks:
-                    self._failures[pid] = 0
-                    for channel, value in pid_dec.parse_pid_values(
-                        chunks[pid], pid
-                    ).items():
-                        self._emit("pid_value", channel, value, self._clock())
+                    self._emit_values(chunks[pid], pid)
                 else:
-                    self._failures[pid] = self._failures.get(pid, 0) + 1
-                    if self._failures[pid] >= _MAX_PID_FAILURES:
-                        self._drop_pid(pid)
+                    self._note_pid_failure(pid)
         if self._ticks % _VOLTAGE_EVERY == 0:
             try:
                 self._emit("voltage", self._read_voltage())
@@ -653,9 +731,27 @@ class ObdEngine:
         return float(match.group(1))
 
     def _req(self, cmd: str, timeout: float | None = None) -> str:
+        # Multi-command jobs (Mode $06, freeze-frame, $05 walks, discovery)
+        # issue dozens of requests; stopping between them keeps shutdown
+        # prompt even when every one of them would time out on a dead bus.
+        if self._stop:
+            raise ElmAborted()
         if self._session is None:
             raise ElmError("no-adapter", "Not connected")
         return self._session.command(cmd, timeout)
+
+    def _is_stopping(self) -> bool:
+        return self._stop
+
+    def _report_unexpected(self, where: str, exc: Exception) -> None:
+        """Surface an internal failure without ending the engine loop."""
+        detail = traceback.format_exception_only(type(exc), exc)[-1].strip()
+        frames = traceback.extract_tb(exc.__traceback__)
+        origin = f" at {frames[-1].name}:{frames[-1].lineno}" if frames else ""
+        try:
+            self._emit("error", f"{where} hit an internal error{origin}: {detail}")
+        except Exception:
+            pass  # the sink itself failed; no way left to report it
 
     def _drop_connection(self, reason: str, *, error: bool = False) -> None:
         session, self._session = self._session, None
@@ -677,6 +773,7 @@ class ObdEngine:
             device,
             protocol=self._protocol,
             on_status=lambda msg: self._emit("status", msg),
+            should_abort=self._is_stopping,
         )
 
     def _emit(self, kind: str, *args: Any) -> None:

@@ -56,6 +56,35 @@ class SessionStore:
         self._prune()
         return path
 
+    # -- crash recovery ----------------------------------------------------------
+
+    _RECOVERY_NAME = "crash-recovery.json"
+
+    @property
+    def _recovery_path(self) -> Path:
+        return self._dir / self._RECOVERY_NAME
+
+    def save_crash_recovery(self, report: dict[str, Any]) -> Path:
+        """Atomically persist the in-progress session (fixed filename)."""
+        self._dir.mkdir(parents=True, exist_ok=True)
+        tmp = self._recovery_path.with_suffix(".json.tmp")
+        tmp.write_text(
+            json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        tmp.replace(self._recovery_path)  # atomic on POSIX and Windows
+        return self._recovery_path
+
+    def load_crash_recovery(self) -> dict[str, Any] | None:
+        """Return the last unsaved session report, or ``None``."""
+        return self._read(self._recovery_path)
+
+    def clear_crash_recovery(self) -> None:
+        """Remove the crash-recovery file (graceful shutdown = clean state)."""
+        try:
+            self._recovery_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
     # -- read --------------------------------------------------------------------
 
     def list(self) -> list[dict[str, Any]]:
@@ -266,3 +295,164 @@ def record_has_data(record: ScanRecord) -> bool:
         or record.nhtsa
         or record.active_tests
     )
+
+
+# Monitor keys by display name (readiness dict stores name, not key).
+_MONITOR_KEYS = {
+    "Misfire": "misfire",
+    "Fuel system": "fuel",
+    "Comprehensive components": "ccm",
+    "Catalyst": "cat",
+    "Heated catalyst": "hcat",
+    "Evaporative system": "evap",
+    "Secondary air system": "air",
+    "A/C refrigerant": "acrf",
+    "Oxygen sensor": "o2s",
+    "Oxygen sensor heater": "htr",
+    "EGR system": "egr",
+}
+
+
+def record_from_report(report: dict[str, Any]) -> ScanRecord:
+    """Rebuild a :class:`ScanRecord` from a saved report (inverse of ``build_report``).
+
+    Complex objects (mode $06/$05 results, UDS responses) are reconstructed
+    with :class:`types.SimpleNamespace` carrying the attributes
+    ``build_report`` reads — enough for a faithful round-trip save.
+    """
+    from types import SimpleNamespace
+
+    from autodiag.obd.readiness import Monitor, MonitorStatus
+
+    record = ScanRecord()
+
+    vehicle = report.get("vehicle") or {}
+    record.vin = vehicle.get("vin")
+    record.cal_ids = list(vehicle.get("calibration_ids") or [])
+    record.cvns = list(vehicle.get("cvn") or [])
+    record.obd_standard = vehicle.get("obd_standard")
+    record.fuel_type = vehicle.get("fuel_type")
+    record.nhtsa = vehicle.get("details")
+
+    adapter = report.get("adapter") or {}
+    if adapter.get("name"):
+        record.session = SimpleNamespace(
+            adapter=adapter["name"],
+            voltage=adapter.get("voltage"),
+            protocol=adapter.get("protocol"),
+            protocol_number=None,
+        )
+
+    record.dtcs = {
+        source: [entry.get("code") for entry in entries if entry.get("code")]
+        for source, entries in (report.get("dtcs") or {}).items()
+    }
+
+    readiness = report.get("readiness")
+    if readiness is not None:
+        monitors = []
+        for entry in readiness.get("monitors") or []:
+            name = str(entry.get("name") or "")
+            monitors.append(
+                Monitor(
+                    key=_MONITOR_KEYS.get(name, name.lower().replace(" ", "_")),
+                    name=name,
+                    supported=bool(entry.get("supported")),
+                    complete=bool(entry.get("complete")),
+                    continuous=bool(entry.get("continuous")),
+                )
+            )
+        record.monitors = MonitorStatus(
+            mil_on=bool(readiness.get("mil_on")),
+            dtc_count=int(readiness.get("dtc_count") or 0),
+            monitors=tuple(monitors),
+        )
+
+    freeze: dict[int, dict[int, float]] = {}
+    for item in report.get("freeze_frame") or []:
+        try:
+            frame = int(item.get("frame") or 0)
+            pid = int(str(item.get("pid") or "0"), 16)
+            value = float(item.get("value") or 0)
+        except (ValueError, TypeError):
+            continue
+        freeze.setdefault(frame, {})[pid] = value
+    record.freeze = freeze
+
+    record.mode06 = [
+        SimpleNamespace(
+            mid=int(str(item.get("mid") or "0"), 16),
+            tid=int(str(item.get("tid") or "0"), 16),
+            uasid=0,
+            raw_value=0,
+            raw_min=0,
+            raw_max=0,
+            value=float(item.get("value") or 0),
+            min_value=float(item.get("min") or 0),
+            max_value=float(item.get("max") or 0),
+            unit=str(item.get("unit") or ""),
+            passed=item.get("result") == "PASS",
+            sensor_label=str(item.get("sensor") or ""),
+            test_name=str(item.get("test") or ""),
+            monitor_name=str(item.get("monitor") or ""),
+        )
+        for item in report.get("mode06") or []
+    ]
+
+    record.mode05 = [
+        SimpleNamespace(
+            tid=int(str(item.get("tid") or "0"), 16),
+            sensor=int(str(item.get("sensor") or "0"), 16),
+            raw_value=0,
+            raw_min=None,
+            raw_max=None,
+            value=float(item.get("value") or 0),
+            min_value=float(item.get("min") or 0) if item.get("min") is not None else None,
+            max_value=float(item.get("max") or 0) if item.get("max") is not None else None,
+            unit=str(item.get("unit") or ""),
+            via_pid_1d=False,
+            name=str(item.get("name") or ""),
+            tid_hex=str(item.get("tid") or ""),
+            sensor_label=str(item.get("sensor_name") or ""),
+            test_name=str(item.get("test") or ""),
+            passed=item.get("result") == "PASS",
+            result=str(item.get("result") or ""),
+        )
+        for item in report.get("mode05") or []
+    ]
+
+    from datetime import datetime as _dt
+
+    record.uds = [
+        (
+            _dt.fromisoformat(str(item.get("time") or "1970-01-01T00:00:00")).timestamp(),
+            str(item.get("request") or ""),
+            SimpleNamespace(
+                sid=0x00,
+                payload=b"",
+                raw=str(item.get("raw") or ""),
+            )
+            if item.get("ok")
+            else SimpleNamespace(
+                message=str(item.get("result") or ""),
+                raw=str(item.get("raw") or ""),
+            ),
+        )
+        for item in report.get("uds") or []
+    ]
+
+    record.active_tests = [
+        (str(item.get("request") or ""), str(item.get("outcome") or ""))
+        for item in report.get("active_tests") or []
+    ]
+
+    record.pids = {
+        int(str(item.get("pid") or "0"), 16): (float(item.get("value") or 0), 0.0)
+        for item in report.get("live_data") or []
+    }
+
+    log = report.get("live_log") or {}
+    record.log_file = log.get("file")
+    record.log_rows = int(log.get("rows") or 0)
+
+    return record

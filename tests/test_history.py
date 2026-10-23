@@ -13,6 +13,7 @@ from autodiag.services.history import (
     SessionStore,
     default_directory,
     describe_report,
+    record_from_report,
     record_has_data,
 )
 from autodiag.services.record import ScanRecord
@@ -242,3 +243,124 @@ def test_describe_report_shows_work_order():
     text = describe_report(report)
     assert "Customer: Sam Rivera" in text
     assert "Job: Misfire diagnosis" in text
+
+
+# -- crash recovery (M39) -------------------------------------------------------
+
+
+def test_crash_recovery_round_trip(tmp_path):
+    store = SessionStore(tmp_path / "sessions")
+    report = _report()
+    path = store.save_crash_recovery(report)
+    assert path.name == "crash-recovery.json"
+    loaded = store.load_crash_recovery()
+    assert loaded is not None
+    assert loaded["vehicle"]["vin"] == report["vehicle"]["vin"]
+
+
+def test_crash_recovery_clear(tmp_path):
+    store = SessionStore(tmp_path / "sessions")
+    store.save_crash_recovery(_report())
+    assert store.load_crash_recovery() is not None
+    store.clear_crash_recovery()
+    assert store.load_crash_recovery() is None
+    store.clear_crash_recovery()  # clearing twice is safe
+
+
+def test_crash_recovery_load_when_missing(tmp_path):
+    store = SessionStore(tmp_path / "sessions")
+    assert store.load_crash_recovery() is None
+
+
+def test_crash_recovery_overwrites_previous(tmp_path):
+    store = SessionStore(tmp_path / "sessions")
+    report1 = _report()
+    report2 = build_report(make_record(), now=datetime(2026, 11, 1, tzinfo=UTC))
+    store.save_crash_recovery(report1)
+    store.save_crash_recovery(report2)
+    loaded = store.load_crash_recovery()
+    assert loaded is not None
+    assert loaded["generated_at"] == report2["generated_at"]
+
+
+def test_crash_recovery_not_pruned_by_save(tmp_path):
+    store = SessionStore(tmp_path / "sessions")
+    store.save_crash_recovery(_report())
+    # A normal save must not delete the recovery file
+    store.save(_report())
+    assert store.load_crash_recovery() is not None
+
+
+# -- record_from_report (M39) ----------------------------------------------------
+
+
+def test_record_from_report_round_trip(tmp_path):
+    original = make_record()
+    report = build_report(original)
+    restored = record_from_report(report)
+
+    assert restored.vin == original.vin
+    assert restored.cal_ids == original.cal_ids
+    assert restored.cvns == original.cvns
+    assert restored.obd_standard == original.obd_standard
+    assert restored.fuel_type == original.fuel_type
+    assert restored.dtcs == original.dtcs
+    assert restored.active_tests == original.active_tests
+    assert restored.nhtsa == original.nhtsa
+    assert restored.log_file == original.log_file
+    assert restored.log_rows == original.log_rows
+
+
+def test_record_from_report_freeze(tmp_path):
+    original = make_record()
+    original.record_event("freeze_all", (0, {0x05: 83.0, 0x0C: 1726.0}))
+    report = build_report(original)
+    restored = record_from_report(report)
+    assert restored.freeze == original.freeze
+
+
+def test_record_from_report_monitors(tmp_path):
+    original = make_record()
+    report = build_report(original)
+    restored = record_from_report(report)
+    assert restored.monitors is not None
+    assert restored.monitors.mil_on == original.monitors.mil_on
+    assert len(restored.monitors.monitors) == len(original.monitors.monitors)
+
+
+def test_record_from_report_pids(tmp_path):
+    original = make_record()
+    report = build_report(original)
+    restored = record_from_report(report)
+    assert 0x0C in restored.pids
+    assert restored.pids[0x0C][0] == 1726.0
+
+
+def test_record_from_report_mode06(tmp_path):
+    original = make_record()
+    report = build_report(original)
+    restored = record_from_report(report)
+    assert len(restored.mode06) == len(original.mode06)
+    if restored.mode06:
+        assert restored.mode06[0].mid == original.mode06[0].mid
+        assert restored.mode06[0].tid == original.mode06[0].tid
+
+
+def test_record_from_report_rebuild_report_identical(tmp_path):
+    """Round-trip: record → report → record → report produces same report."""
+    original = make_record()
+    report1 = build_report(original)
+    restored = record_from_report(report1)
+    report2 = build_report(restored)
+    assert report1["vehicle"] == report2["vehicle"]
+    assert report1["dtcs"] == report2["dtcs"]
+    assert report1["active_tests"] == report2["active_tests"]
+    assert report1["freeze_frame"] == report2["freeze_frame"]
+
+
+def test_record_from_report_handles_empty(tmp_path):
+    record = record_from_report({})
+    assert record.vin is None
+    assert record.dtcs == {}
+    assert record.monitors is None
+    assert record.active_tests == []

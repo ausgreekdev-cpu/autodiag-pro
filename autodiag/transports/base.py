@@ -32,6 +32,15 @@ class Transport(ABC):
     def is_open(self) -> bool:
         """True while the connection is usable."""
 
+    def pending(self) -> int | None:
+        """Bytes already buffered for reading, or ``None`` if unknown.
+
+        Transports that can answer cheaply (pyserial exposes ``in_waiting``)
+        let callers skip a blocking read with nothing to read. ``None`` means
+        "cannot tell": callers must fall back to a timed read.
+        """
+        return None
+
     def __enter__(self) -> "Transport":
         self.open()
         return self

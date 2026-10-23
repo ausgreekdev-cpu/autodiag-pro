@@ -59,7 +59,9 @@ port (USB cable or paired Bluetooth SPP dongle).
   message, so a second ECU never produces phantom DTCs
 - **Session history** — every scan auto-saves to disk on close (last 50 kept);
   browse, preview, re-export as JSON/CSV/HTML/PDF, attach a work order
-  (customer, phone, mileage, job, notes) to any session, or delete
+  (customer, phone, mileage, job, notes) to any session, or delete.
+  Crash-safe: the in-progress session is persisted every 30 s and restored
+  on next launch if the app didn't close cleanly
 - **Time-series CSV logs** — every polled value streams into a timestamped CSV
   (*Log*, on by default; newest 50 kept) and the matching history session links
   back to it
@@ -179,6 +181,7 @@ stays offline — key checks are local Ed25519 verification.
 | 35. AutoAuth SGW unlock assistant (v0.23.0) | done |
 | 36. Active-test reports + UDS preset library (v0.23.0) | done |
 | 37. Ford SGW seed-key computation (v0.23.0) | done |
+| 38. Session auto-recovery (crash-safe saves) (v0.24.0) | done |
 
 ## Install & run
 

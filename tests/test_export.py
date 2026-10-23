@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import csv
 import html
+import io
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
@@ -392,3 +394,109 @@ def test_record_has_data_with_only_active_tests():
     assert not record_has_data(record)
     record.record_event("mode08", (("0806", "accepted"),))
     assert record_has_data(record)
+
+
+# -- one time base, no formulas (review #9, #10) -----------------------------------
+
+
+def test_uds_rows_share_the_generated_at_time_base():
+    record = ScanRecord()
+    instant = datetime(2026, 3, 4, 5, 6, 7, tzinfo=UTC)
+    record.uds.append((instant.timestamp(), "22F190", parse_response("62F1903144")))
+
+    report = build_report(record, now=instant)
+    entry = report["uds"][0]
+    assert entry["time"] == "2026-03-04T05:06:07+00:00"
+    assert entry["time"] == report["generated_at"]
+    assert "uds,22F190,2026-03-04T05:06:07+00:00" in report_to_csv(report)
+
+
+def test_uds_time_is_not_local_naive():
+    record = ScanRecord()
+    instant = datetime(2026, 3, 4, 5, 6, 7, tzinfo=UTC)
+    record.uds.append((instant.timestamp(), "22F190", parse_response("62F1903144")))
+    text = build_report(record, now=instant)["uds"][0]["time"]
+
+    parsed = datetime.fromisoformat(text)
+    assert parsed.tzinfo is not None
+    assert parsed == instant  # same instant, whatever the machine zone is
+
+
+def test_naive_now_is_normalised_to_utc():
+    report = build_report(make_record(), now=datetime(2026, 1, 1, 0, 0, 0))
+    assert report["generated_at"] == "2026-01-01T00:00:00+00:00"
+
+
+def test_offset_now_is_normalised_to_utc():
+    local = datetime(2026, 3, 4, 10, 36, 7, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+    report = build_report(make_record(), now=local)
+    assert report["generated_at"] == "2026-03-04T05:06:07+00:00"
+
+
+def test_html_shows_timestamps_in_local_time_with_offset():
+    record = make_record()
+    record.record_event("uds", (("22F190", parse_response("62F1903144")),))
+    report = build_report(record, now=_NOW)
+    doc = report_to_html(report)
+
+    for iso in (report["generated_at"], report["uds"][0]["time"]):
+        shown = datetime.fromisoformat(iso).astimezone().strftime("%Y-%m-%d %H:%M:%S %z")
+        assert shown in doc
+        assert iso not in doc  # storage form stays out of the human-facing page
+
+
+def test_csv_neutralizes_formula_cells():
+    report = build_report(make_record(), now=_NOW)
+    report["work_order"] = {
+        "customer": "=cmd|' /C calc'!A0",
+        "phone": "+61400000000",
+        "mileage": "-2+3",
+        "job": "@SUM(1+1)",
+        "notes": "\tHYPERLINK(\"http://example.test\")",
+    }
+    report["dtcs"]["stored"].append(
+        {"code": "P9999", "description": "\n=cmd|' /C calc'!A0", "guidance": None}
+    )
+    report["uds"] = [
+        {
+            "time": "2026-01-01T00:00:00+00:00",
+            "request": "=1+1",
+            "ok": True,
+            "result": "-1+1+cmd|' /C calc'!A0",
+            "raw": "",
+        }
+    ]
+
+    rows = list(csv.reader(io.StringIO(report_to_csv(report))))
+    cells = {(row[0], row[1]): row[3] for row in rows[1:]}
+
+    assert cells[("work_order", "customer")] == "'=cmd|' /C calc'!A0"
+    assert cells[("work_order", "phone")] == "'+61400000000"
+    assert cells[("work_order", "mileage")] == "'-2+3"
+    assert cells[("work_order", "job")] == "'@SUM(1+1)"
+    assert cells[("work_order", "notes")] == "'\tHYPERLINK(\"http://example.test\")"
+    assert cells[("dtc.stored", "P9999")] == "'\n=cmd|' /C calc'!A0"
+    # Section/key columns are user- and network-authored too.
+    assert cells[("uds", "'=1+1")] == "OK: -1+1+cmd|' /C calc'!A0"
+    report["active_tests"] = [{"request": "=1+1", "outcome": "-1+1+cmd|' /C calc'!A0"}]
+    again = {
+        (row[0], row[1]): row[3]
+        for row in csv.reader(io.StringIO(report_to_csv(report)))
+        if row[0] == "active_test"
+    }
+    assert again[("active_test", "[0].request")] == "'=1+1"
+    assert again[("active_test", "[0].outcome")] == "'-1+1+cmd|' /C calc'!A0"
+
+    # Nothing a spreadsheet could start evaluating survives, in any column.
+    for key, value in cells.items():
+        assert value == "" or value[0] not in "=+-@\t\r\n", key
+
+
+def test_csv_keeps_negative_measurements_numeric():
+    report = build_report(make_record(), now=_NOW)
+    report["live_data"] = [
+        {"pid": "0F", "name": "Intake air temperature", "unit": "°C", "value": -12.5}
+    ]
+    text = report_to_csv(report)
+    assert "live_data,0F,Intake air temperature,-12.5 °C" in text
+    assert "readiness,mil_on,,True" in text  # ordinary values untouched

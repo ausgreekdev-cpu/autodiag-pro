@@ -39,6 +39,36 @@ def test_serial_transport_roundtrip():
     assert not transport.is_open
 
 
+def test_serial_transport_reports_pending_bytes():
+    fake = FakeSerial(responses=elm_script())
+    transport = SerialTransport("/dev/fake", 38400, serial_factory=lambda _d, _b: fake)
+    assert transport.pending() == 0  # never opened
+    transport.open()
+    assert transport.pending() == 0
+    fake.write(b"0100\r")  # the scripted device answers into its buffer
+    assert transport.pending() > 0
+    transport.read(timeout=0.05)
+    transport.close()
+    assert transport.pending() == 0  # closed ports report nothing
+
+
+def test_serial_transport_pending_is_unknown_when_unreadable():
+    class NoAttributeSerial(FakeSerial):
+        @property
+        def in_waiting(self):
+            raise AttributeError("this backend has no in_waiting")
+
+    class OddValueSerial(FakeSerial):
+        in_waiting = "n/a"  # some backends return something unparsable
+
+    for fake in (NoAttributeSerial(), OddValueSerial()):
+        transport = SerialTransport(
+            "/dev/fake", 38400, serial_factory=lambda _d, _b, f=fake: f
+        )
+        transport.open()
+        assert transport.pending() is None  # caller falls back to a timed read
+
+
 def test_serial_transport_read_requires_open():
     transport = SerialTransport("/dev/fake", 38400, serial_factory=lambda _d, _b: FakeSerial())
     with pytest.raises(TransportError):

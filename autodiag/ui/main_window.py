@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -11,6 +12,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
@@ -24,7 +26,11 @@ from autodiag.obd.elm327 import SessionInfo
 from autodiag.obd.pids import PID_REGISTRY, describe_pid
 from autodiag.services.alerts import AlertEvent, AlertLog, Threshold, Watchlist
 from autodiag.services.export import build_report
-from autodiag.services.history import SessionStore, record_has_data
+from autodiag.services.history import (
+    SessionStore,
+    record_from_report,
+    record_has_data,
+)
 from autodiag.services.license import LicenseManager, get_license
 from autodiag.services.live_log import LiveLog
 from autodiag.services.record import ScanRecord
@@ -69,6 +75,7 @@ class MainWindow(QMainWindow):
         self._store = store if store is not None else SessionStore()
         self._license = license_manager if license_manager is not None else get_license()
         self._connected = False
+        self._closing = False  # session persisted once, even if stop retries
         # logs live beside the sessions; armed from prefs (default on)
         self._live_log = LiveLog(
             Path(self._store.directory) / "logs",
@@ -98,6 +105,14 @@ class MainWindow(QMainWindow):
         self._build_statusbar()
         self._wire_worker()
         self._restore_prefs()
+
+        # Crash-recovery: persist the session every 30 s so a crash or
+        # force-quit doesn't lose the scan.  Cleared on graceful shutdown.
+        self._recovery_timer = QTimer(self)
+        self._recovery_timer.setInterval(30_000)
+        self._recovery_timer.timeout.connect(self._save_crash_recovery)
+        self._recovery_timer.start()
+        self._check_crash_recovery()
 
     # -- construction -----------------------------------------------------------
 
@@ -412,22 +427,65 @@ class MainWindow(QMainWindow):
         else:
             self._state_label.setText(f"Reconnecting ({attempt}/{maximum})…")
 
+    # -- crash recovery -------------------------------------------------------------
+
+    def _save_crash_recovery(self) -> None:
+        """Persist the in-progress session so a crash doesn't lose it."""
+        if not record_has_data(self.record):
+            return
+        try:
+            self._store.save_crash_recovery(build_report(self.record))
+        except OSError:
+            pass  # a locked/full disk must not kill the timer
+
+    def _check_crash_recovery(self) -> None:
+        """Offer to restore an unsaved session left behind by a crash."""
+        report = self._store.load_crash_recovery()
+        if report is None:
+            return
+        generated = str(report.get("generated_at") or "a previous session")
+        answer = QMessageBox.question(
+            self,
+            "Unsaved session found",
+            f"An unsaved session from {generated} was found.\n\n"
+            "Restore it?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self.record = record_from_report(report)
+            self.statusBar().showMessage("Unsaved session restored.", 8000)
+        else:
+            self._store.clear_crash_recovery()
+
     # -- lifecycle ------------------------------------------------------------------
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 — Qt naming
         self.statusBar().showMessage("Shutting down…", 0)
-        self._live_log.close()
-        if self._live_log.path is not None:
-            self.record.log_file = self._live_log.path.name
-            self.record.log_rows = self._live_log.row_count
-        if record_has_data(self.record):
-            try:
-                self._store.save(build_report(self.record))
-            except OSError as exc:
-                self.statusBar().showMessage(f"Could not save session: {exc}", 5000)
-        self._prefs.set_last_port(self._port_combo.currentData())
-        self._prefs.set_window_geometry(self.saveGeometry())
-        self._prefs.set_window_state(self.saveState())
-        self._prefs.sync()
-        self.worker.shutdown(5000)
+        if not self._closing:
+            self._recovery_timer.stop()
+            self._live_log.close()
+            if self._live_log.path is not None:
+                self.record.log_file = self._live_log.path.name
+                self.record.log_rows = self._live_log.row_count
+            if record_has_data(self.record):
+                try:
+                    self._store.save(build_report(self.record))
+                except OSError as exc:
+                    self.statusBar().showMessage(f"Could not save session: {exc}", 5000)
+            self._store.clear_crash_recovery()
+            self._prefs.set_last_port(self._port_combo.currentData())
+            self._prefs.set_window_geometry(self.saveGeometry())
+            self._prefs.set_window_state(self.saveState())
+            self._prefs.sync()
+            self._closing = True
+        if not self.worker.shutdown(5000):
+            # Deleting a running QThread aborts the process; ask the user to
+            # close again rather than crashing on the way out. The session was
+            # already saved by the block above, so a retry only stops the loop.
+            self.statusBar().showMessage(
+                "The adapter is still stopping — close again to exit", 0
+            )
+            event.ignore()
+            return
         event.accept()

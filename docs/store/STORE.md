@@ -61,7 +61,8 @@ four-part version than the previous one (CI takes care of this per tag).
   - Curated UDS preset library ($2F/$31) for common bi-directional controls
   - Security-gateway (SGW) unlock relay: $27 seed/key on the gateway module
     (Workshop tier) — Ford seed-key algorithms built in
-  - Scan history, HTML/PDF/CSV reports and customer work orders
+  - Scan history, HTML/PDF/CSV reports and customer work orders — sessions
+    auto-save and survive crashes (restored on next launch)
   - Local repair guidance — likely causes, first checks and freeze-frame context
     for stored codes (offline heuristics)
   - VIN decode and open safety-recall lookup via official NHTSA services

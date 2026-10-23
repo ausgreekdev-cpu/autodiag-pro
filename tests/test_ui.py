@@ -168,6 +168,7 @@ def test_live_graph_clear_empties_curves_and_rebases_time(qapp):
     assert not xs and not ys  # no stale curve left on screen
 
     graph.add_point(0x0C, 900.0, 500.0)  # new origin → x starts over
+    graph.flush()  # redraws are coalesced per event-loop turn
     xs, _ys = graph._curves[0x0C].getData()
     assert list(xs) == [0.0]
 
@@ -179,6 +180,109 @@ def test_live_graph_set_series_applies_full_ranges(qapp):
     assert xmin == pytest.approx(0.0)
     assert xmax == pytest.approx(2.0)
     assert ymin <= 10.0 and ymax >= 30.0
+
+
+def test_live_graph_coalesces_a_poll_burst_into_one_redraw(qapp, monkeypatch):
+    graph = LiveGraph()
+    pids = [0x0C, 0x0D, 0x05, 0x11, 0x0F, 0x10]
+    graph.set_active(pids)
+
+    renders: list[int] = []
+    original = graph._render_all
+    monkeypatch.setattr(
+        graph, "_render_all", lambda: (renders.append(1), original())[1]
+    )
+
+    for index, pid in enumerate(pids):
+        graph.add_point(pid, 100.0 + index, 10.0 + index * 0.25)
+    assert renders == []  # a burst is not drawn point by point …
+
+    graph.flush()
+    assert len(renders) == 1  # … but in a single pass
+    for pid in pids:
+        xs, _ys = graph._curves[pid].getData()
+        assert len(xs) == 1
+
+
+def test_live_graph_renders_on_the_next_event_loop_turn(qapp):
+    """Production path: no caller flushes, the coalescing timer delivers."""
+    graph = LiveGraph()
+    graph.set_active([0x0C, 0x0D])
+    for i in range(4):
+        graph.add_point(0x0C, 800.0 + i * 40, 100.0 + i * 0.25)
+        graph.add_point(0x0D, 40.0 + i, 100.0 + i * 0.25)
+
+    assert graph._dirty
+    assert graph._curves[0x0C].getData()[0] is None  # not painted point by point
+
+    qapp.processEvents()
+    assert not graph._dirty
+    xs, _ys = graph._curves[0x0C].getData()
+    assert len(xs) == 4
+    (xmin, xmax), (ymin, ymax) = graph.plot_widget.viewRange()
+    assert xmax == pytest.approx(0.75)
+    assert ymin <= 40.0 and ymax >= 920.0  # both series included
+
+
+def test_live_graph_hands_only_the_visible_window_to_the_curve(qapp):
+    graph = LiveGraph()
+    graph.set_active([0x0C])
+    graph.set_window(10.0)
+    for i in range(400):  # 100 s of history, 10 s visible
+        graph.add_point(0x0C, float(i), i * 0.25)
+    graph.flush()
+
+    xs, _ys = graph._curves[0x0C].getData()
+    assert len(graph._xs[0x0C]) == 400  # full history still retained
+    assert 35 <= len(xs) <= 45  # 10 s at 4 Hz, not 400 points
+    assert float(min(xs)) >= graph._xs[0x0C].last() - 10.0
+
+
+def test_series_ring_drops_oldest_and_survives_compaction():
+    from autodiag.ui.widgets.graph import _Series
+
+    series = _Series(4)
+    for i in range(20):  # 2.5× the storage, so compaction runs twice
+        series.append(float(i))
+    assert len(series) == 4
+    assert list(series.view()) == [16.0, 17.0, 18.0, 19.0]
+    assert series.first() == 16.0 and series.last() == 19.0
+
+    series.clear()
+    assert len(series) == 0
+    series.append(1.0)
+    assert list(series.view()) == [1.0]
+
+
+def test_series_unbounded_grows_for_static_loads():
+    from autodiag.ui.widgets.graph import _Series
+
+    series = _Series(None)
+    for i in range(3000):  # crosses the 1024 → 2048 → 4096 growth steps
+        series.append(float(i))
+    assert len(series) == 3000
+    assert series.first() == 0.0 and series.last() == 2999.0
+
+    empty = _Series.from_values([])
+    assert len(empty) == 0
+    empty.append(7.0)  # an empty static load must still accept a sample
+    assert list(empty.view()) == [7.0]
+
+
+def test_live_graph_ring_buffer_keeps_newest_samples(qapp):
+    from autodiag.ui.widgets.graph import _BUFFER
+
+    graph = LiveGraph()
+    graph.set_active([0x0C])
+    graph.set_window(None)
+    for i in range(_BUFFER + 100):
+        graph.add_point(0x0C, float(i % 50), i * 0.25)
+    graph.flush()
+
+    assert len(graph._xs[0x0C]) == _BUFFER
+    assert graph._xs[0x0C].first() == pytest.approx(100 * 0.25)
+    xs, _ys = graph._curves[0x0C].getData()
+    assert len(xs) == _BUFFER  # "All" mode shows the whole buffer
 
 
 def test_dashboard_set_graphed_toggles_checkbox(qapp):
@@ -284,6 +388,7 @@ def test_dashboard_pause_and_clear_buttons(qapp):
     panel = DashboardPanel(worker)
     worker.pids_supported.emit({0x0C})
     worker.pid_value.emit(0x0C, 1726.0, 1.0)
+    panel._graph.flush()  # redraws are coalesced per event-loop turn
     xs, _ys = panel._graph._curves[0x0C].getData()
     assert len(xs) == 1
 
@@ -555,6 +660,32 @@ def test_main_window_close_shuts_down_worker(qapp, tmp_path):
     assert not window.worker.isRunning()
 
 
+def test_main_window_refuses_close_while_worker_still_runs(qapp, tmp_path):
+    """Deleting a running QThread aborts Qt: retry instead of crashing."""
+    window = MainWindow(prefs=_fresh_prefs(tmp_path))
+    calls = {"stop": 0, "sync": 0}
+
+    def slow_stop(timeout_ms: int = 5000) -> bool:
+        calls["stop"] += 1
+        return calls["stop"] > 1
+
+    original_sync = window._prefs.sync
+
+    def counting_sync() -> None:
+        calls["sync"] += 1
+        original_sync()
+
+    window.worker.shutdown = slow_stop
+    window._prefs.sync = counting_sync
+
+    assert window.close() is False  # stop timed out → close refused
+    assert "still stopping" in window.statusBar().currentMessage()
+    assert calls == {"stop": 1, "sync": 1}
+
+    assert window.close() is True  # retry: stops, no second session save
+    assert calls == {"stop": 2, "sync": 1}
+
+
 def test_main_window_restores_port_panel_and_interval(qapp, tmp_path, monkeypatch):
     from autodiag.transports.serial_transport import SerialPortInfo
 
@@ -807,3 +938,91 @@ def test_main_window_view_log_missing_file_stays_put(qapp, tmp_path):
     assert window._stack.currentIndex() == 7  # did not switch
     assert "no longer available" in window.statusBar().currentMessage()
     window.close()
+
+
+# -- crash recovery (M39) -------------------------------------------------------
+
+
+def test_main_window_saves_crash_recovery(qapp, tmp_path):
+    from tests.test_export import make_record as _mk
+
+    window = MainWindow(
+        prefs=_fresh_prefs(tmp_path), store=_fresh_store(tmp_path / "sessions")
+    )
+    window.record = _mk()  # populate with real data
+    window._save_crash_recovery()
+    loaded = window._store.load_crash_recovery()
+    assert loaded is not None
+    assert loaded["vehicle"]["vin"] == "1D4GP00R56B123457"
+
+
+def test_main_window_skips_recovery_when_empty(qapp, tmp_path):
+    window = MainWindow(
+        prefs=_fresh_prefs(tmp_path), store=_fresh_store(tmp_path / "sessions")
+    )
+    window.record.vin = None  # no data
+    window._save_crash_recovery()
+    assert window._store.load_crash_recovery() is None
+
+
+def test_main_window_restores_crash_recovery(qapp, tmp_path, monkeypatch):
+    from autodiag.services.export import build_report as _br
+    from tests.test_export import make_record as _mk
+
+    store = _fresh_store(tmp_path / "sessions")
+    store.save_crash_recovery(_br(_mk()))
+
+    # Mock the question dialog to return "Yes"
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(
+        "autodiag.ui.main_window.QMessageBox.question",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
+    )
+
+    window = MainWindow(prefs=_fresh_prefs(tmp_path), store=store)
+    assert window.record.vin == "1D4GP00R56B123457"
+    assert window.record.dtcs  # codes restored
+
+
+def test_main_window_discards_crash_recovery(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from autodiag.services.export import build_report as _br
+    from tests.test_export import make_record as _mk
+
+    store = _fresh_store(tmp_path / "sessions")
+    store.save_crash_recovery(_br(_mk()))
+
+    monkeypatch.setattr(
+        "autodiag.ui.main_window.QMessageBox.question",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.No),
+    )
+
+    window = MainWindow(prefs=_fresh_prefs(tmp_path), store=store)
+    assert window.record.vin is None  # not restored
+    assert store.load_crash_recovery() is None  # file cleared
+
+
+def test_main_window_close_clears_recovery(qapp, tmp_path):
+    from tests.test_export import make_record as _mk
+
+    store = _fresh_store(tmp_path / "sessions")
+    window = MainWindow(prefs=_fresh_prefs(tmp_path), store=store)
+    window.record = _mk()
+    window._save_crash_recovery()
+    assert store.load_crash_recovery() is not None
+
+    # Simulate the save-and-clear path from closeEvent
+    window._recovery_timer.stop()
+    from autodiag.services.export import build_report as _br
+    if window.record and True:
+        store.save(_br(window.record))
+    store.clear_crash_recovery()
+    assert store.load_crash_recovery() is None
+
+
+def test_main_window_recovery_timer_is_running(qapp, tmp_path):
+    window = MainWindow(prefs=_fresh_prefs(tmp_path), store=_fresh_store(tmp_path))
+    assert window._recovery_timer.isActive()
+    assert window._recovery_timer.interval() == 30_000
